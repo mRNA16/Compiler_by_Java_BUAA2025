@@ -54,7 +54,7 @@ public abstract class AbstractASTNode implements ASTNode {
     
     @Override
     public int getLineNumber() {
-        return token != null ? token.getLineId() : -1;
+        return token != null ? token.getLineId() : -8899;
     }
     
     @Override

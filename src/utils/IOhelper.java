@@ -6,7 +6,9 @@ import frontend.FrontEnd;
 import frontend.ast.CompUnit;
 import frontend.lexer.Lexer;
 import frontend.lexer.Token;
-import frontend.parser.Parser;
+import midend.semantic.SymbolManager;
+import midend.semantic.SymbolTable;
+import midend.MidEnd;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -19,6 +21,7 @@ public class IOhelper {
     private static FileOutputStream lexerOutput = null;
     private static FileOutputStream errorOutput = null;
     private static FileOutputStream parserOutput = null;
+    private static FileOutputStream symbolOutputFile = null;
 
     // 分离类加载和流初始化
     public static void initialIO() throws IOException {
@@ -26,6 +29,7 @@ public class IOhelper {
         lexerOutput = new FileOutputStream("lexer.txt");
         errorOutput = new FileOutputStream("error.txt");
         parserOutput = new FileOutputStream("parser.txt");
+        symbolOutputFile = new FileOutputStream("symbol.txt");
     }
 
     // 获得输入流
@@ -58,5 +62,9 @@ public class IOhelper {
         if (ast != null) {
             parserOutput.write(ast.toString().getBytes());
         }
+    }
+
+    public static void printSymbolTable() throws IOException {
+        symbolOutputFile.write(SymbolManager.getInstance().outputAllSymbols().getBytes());
     }
 }

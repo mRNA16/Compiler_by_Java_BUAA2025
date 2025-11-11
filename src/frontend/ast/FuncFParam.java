@@ -5,6 +5,7 @@ package frontend.ast;
  */
 public class FuncFParam extends AbstractASTNode {
     private Ident ident;
+    private boolean isArray = false;
     
     public FuncFParam() {
         super(SyntaxType.FUNC_FPARAM);
@@ -25,6 +26,14 @@ public class FuncFParam extends AbstractASTNode {
      */
     public Ident getIdent() {
         return ident;
+    }
+
+    public void setIsArray(boolean isArray) {
+        this.isArray = isArray;
+    }
+
+    public boolean isArray() {
+        return isArray;
     }
     
     /**

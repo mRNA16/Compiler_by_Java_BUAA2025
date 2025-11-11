@@ -107,7 +107,7 @@ public class Lexer {
     }
 
     public boolean isEof(){
-        return curChar=='\n';
+        return curChar=='\uFFFF';
     }
 
     // 单独处理/

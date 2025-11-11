@@ -222,7 +222,10 @@ public class Parser {
      */
     private VarDecl parseVarDecl() {
         VarDecl varDecl = new VarDecl();
-        if(match(TokenType.STATICTK)) expect(varDecl,TokenType.STATICTK);
+        if(match(TokenType.STATICTK)) {
+            expect(varDecl,TokenType.STATICTK);
+            varDecl.setStatic(true);
+        }
         // 消费类型（目前只支持int）
         expect(varDecl,TokenType.INTTK);
         
@@ -472,6 +475,7 @@ public class Parser {
 
         if(match(TokenType.LBRACK)) {
             consume(funcFParam);
+            funcFParam.setIsArray(true);
             if(match(TokenType.RBRACK)) {
                 consume(funcFParam);
             } else {
