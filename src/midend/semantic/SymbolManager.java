@@ -15,6 +15,7 @@ public class SymbolManager {
     private Stack<SymbolTable> scopeStack;  // 作用域栈
     private List<SymbolTable> allTables;  // 所有符号表（用于输出）
     private int nextScopeNumber;  // 下一个作用域序号
+    private int nextOnlyReadScopeNumber;
 
     private SymbolManager() {
         initialize();
@@ -32,6 +33,7 @@ public class SymbolManager {
      */
     public void initialize() {
         nextScopeNumber = 1;  // 全局作用域序号为1
+        nextOnlyReadScopeNumber = 1;
         rootTable = new SymbolTable(0, nextScopeNumber++, null);
         rootTable.addSymbol(new FunctionSymbol("getint",SymbolType.INT,0,null,null),0);
         scopeStack = new Stack<>();
@@ -64,12 +66,18 @@ public class SymbolManager {
     /**
      * 进入新作用域
      */
-    public void enterScope() {
+    public void enterScope(boolean build) {
         SymbolTable current = getCurrentTable();
-        SymbolTable newTable = new SymbolTable(current.getDepth() + 1, nextScopeNumber++, current);
-        current.addChildTable(newTable);
-        scopeStack.push(newTable);
-        allTables.add(newTable);
+        if(build) {
+            SymbolTable newTable = new SymbolTable(current.getDepth() + 1, nextScopeNumber++, current);
+            current.addChildTable(newTable);
+            scopeStack.push(newTable);
+            allTables.add(newTable);
+        } else {
+            SymbolTable nextTable = allTables.get(nextOnlyReadScopeNumber++);
+            scopeStack.push(nextTable);
+        }
+
     }
 
     /**

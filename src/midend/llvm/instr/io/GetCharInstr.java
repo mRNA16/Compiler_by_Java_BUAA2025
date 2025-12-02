@@ -1,0 +1,18 @@
+package midend.llvm.instr.io;
+
+import midend.llvm.type.IrBaseType;
+
+public class GetCharInstr extends IOInstr{
+    public GetCharInstr() {
+        super(IrBaseType.INT32);
+    }
+
+    public static String GetDeclare() {
+        return "declare i32 @getchar() ";
+    }
+
+    @Override
+    public String toString() {
+        return this.irName + " = call i32 @getchar()";
+    }
+}

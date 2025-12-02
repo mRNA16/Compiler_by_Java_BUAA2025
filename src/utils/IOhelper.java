@@ -6,6 +6,7 @@ import frontend.FrontEnd;
 import frontend.ast.CompUnit;
 import frontend.lexer.Lexer;
 import frontend.lexer.Token;
+import midend.llvm.IrBuilder;
 import midend.semantic.SymbolManager;
 import midend.semantic.SymbolTable;
 import midend.MidEnd;
@@ -22,6 +23,7 @@ public class IOhelper {
     private static FileOutputStream errorOutput = null;
     private static FileOutputStream parserOutput = null;
     private static FileOutputStream symbolOutputFile = null;
+    private static FileOutputStream llvmOutputFile = null;
 
     // 分离类加载和流初始化
     public static void initialIO() throws IOException {
@@ -30,6 +32,7 @@ public class IOhelper {
         errorOutput = new FileOutputStream("error.txt");
         parserOutput = new FileOutputStream("parser.txt");
         symbolOutputFile = new FileOutputStream("symbol.txt");
+        llvmOutputFile = new FileOutputStream("llvm_ir.txt");
     }
 
     // 获得输入流
@@ -66,5 +69,9 @@ public class IOhelper {
 
     public static void printSymbolTable() throws IOException {
         symbolOutputFile.write(SymbolManager.getInstance().outputAllSymbols().getBytes());
+    }
+
+    public static void printLLVMIR() throws IOException {
+        llvmOutputFile.write(MidEnd.getIrModule().toString().getBytes());
     }
 }

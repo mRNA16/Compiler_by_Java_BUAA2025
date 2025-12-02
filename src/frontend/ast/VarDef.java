@@ -10,6 +10,9 @@ public class VarDef extends AbstractASTNode {
     
     public VarDef() {
         super(SyntaxType.VAR_DEF);
+        this.ident = null;
+        this.constExp = null;
+        this.initVal = null;
     }
     
     /**

@@ -101,13 +101,7 @@ public class UnaryExp extends Exp {
     public PrimaryExp getPrimaryExp() {
         return primaryExp;
     }
-    
-    /**
-     * 检查是否为函数调用
-     */
-    public boolean isFunctionCall() {
-        return funcName != null;
-    }
+
     
     /**
      * 检查是否为负数
@@ -121,5 +115,17 @@ public class UnaryExp extends Exp {
      */
     public boolean isLogicalNot() {
         return unaryOp != null && unaryOp.getOp().getType() == TokenType.NOT;
+    }
+
+    public boolean isPrimary(){
+        return primaryExp != null;
+    }
+
+    public boolean isFunctionCall() {
+        return funcName != null;
+    }
+
+    public boolean isUnary() {
+        return unaryExp != null;
     }
 }

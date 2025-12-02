@@ -72,6 +72,22 @@ public class SymbolTable {
     }
 
     /**
+     * 在中间代码生成过程中使用，查找已经具有IrValue的Symbol
+     * 防止还未声明，应该去上一级表中寻找时，误认为是当前表中的同名符号
+     */
+    public Symbol lookupWithIrValue(String name) {
+        SymbolTable current = this;
+        while (current != null) {
+            Symbol symbol = current.lookupLocal(name);
+            if (symbol != null && symbol.getIrValue() != null) {
+                return symbol;
+            }
+            current = current.parent;
+        }
+        return null;
+    }
+
+    /**
      * 添加符号到当前作用域
      * @return 是否成功添加（如果已存在同名符号则返回false）
      */

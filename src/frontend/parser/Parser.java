@@ -433,7 +433,7 @@ public class Parser {
         if (match(TokenType.VOIDTK) || match(TokenType.INTTK)) {
             consumeToken();
         } else {
-            throw new RuntimeException("Expected function type but got " + getCurrentTokenType());
+            throw new RuntimeException("Expected function irType but got " + getCurrentTokenType());
         }
         return new FuncType(token);
     }

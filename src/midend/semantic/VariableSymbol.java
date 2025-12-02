@@ -18,6 +18,8 @@ public class VariableSymbol extends Symbol {
         this.isGlobal = isGlobal;
         this.isStatic = false;
         this.dimensions = new ArrayList<>();
+        // 如果是数组，进行占位
+        if(type.isArray()) this.dimensions.add(1);
     }
 
     public VariableSymbol(String name, SymbolType type, int lineNumber, 
@@ -54,6 +56,18 @@ public class VariableSymbol extends Symbol {
 
     public List<Integer> getDimensions() {
         return new ArrayList<>(dimensions);
+    }
+
+    public int getElementCount() {
+        if(dimensions.isEmpty()||dimensions.get(0)==0) {
+            return 1;
+        } else {
+            int ans = 1;
+            for(Integer dim : dimensions) {
+                ans*=dim;
+            }
+            return ans;
+        }
     }
 
     public void setInitialValue(Object value) {

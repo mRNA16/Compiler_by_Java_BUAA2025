@@ -4,11 +4,14 @@ import error.Error;
 import error.ErrorRecorder;
 import error.ErrorType;
 import frontend.ast.*;
+import frontend.ast.Number;
 import frontend.lexer.Token;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import utils.ConstExpEvaluator;
 import utils.ParserWrapper;
 
 /**
@@ -99,8 +102,8 @@ public class SemanticAnalyzer {
         // 检查是否有数组维度
         List<Integer> dimensions = new ArrayList<>();
         if (constDef.getConstExp() != null) {
-            // 这里简化处理，实际应该计算常量表达式
-            dimensions.add(0);  // 占位
+            // 计算常量表达式得到维度
+            dimensions.add(ConstExpEvaluator.eval(constDef.getConstExp()));
             type = SymbolType.CONST_INT_ARRAY;
         }
 
@@ -140,8 +143,8 @@ public class SemanticAnalyzer {
         // 检查是否有数组维度
         List<Integer> dimensions = new ArrayList<>();
         if (varDef.getConstExp() != null) {
-            // 这里简化处理，实际应该计算常量表达式
-            dimensions.add(0);  // 占位
+            // 计算常量表达式得到数组维度
+            dimensions.add(ConstExpEvaluator.eval(varDef.getConstExp()));  // 占位
             type = SymbolType.INT_ARRAY;
         }
 
@@ -195,7 +198,7 @@ public class SemanticAnalyzer {
         symbolManager.addSymbol(funcSymbol, lineNumber);
 
         // 进入函数作用域
-        symbolManager.enterScope();
+        symbolManager.enterScope(true);
         currentFunctionReturnType = returnType.toString();
         hasReturnStatement.put(getCurrentScopeNumber(), Boolean.FALSE);
 
@@ -240,11 +243,11 @@ public class SemanticAnalyzer {
      */
     private void analyzeMainFunction(MainFuncDef mainFunc) {
         // 进入主函数作用域
-        symbolManager.enterScope();
+        symbolManager.enterScope(true);
         currentFunctionReturnType = "int";
         hasReturnStatement.put(getCurrentScopeNumber(),Boolean.FALSE);
 
-        // 分析函数体（main函数的Block不创建新作用域）
+        // 分析函数体（Block不创建新作用域）
         Block block = mainFunc.getBlock();
         if (block != null) {
             analyzeFunctionBlock(block);
@@ -269,7 +272,7 @@ public class SemanticAnalyzer {
      * 分析代码块（会创建新作用域）
      */
     private void analyzeBlock(Block block) {
-        symbolManager.enterScope();
+        symbolManager.enterScope(true);
 
         for (BlockItem item : block.getBlockItems()) {
             analyzeBlockItem(item);
@@ -714,67 +717,152 @@ public class SemanticAnalyzer {
         }
     }
 
-    /**
-     * 获取表达式的类型
-     * 考虑数组类型的情况
-     */
     private SymbolType getExpressionType(Exp exp) {
         if (exp == null) {
             return SymbolType.INT;
         }
 
-        // 递归查找表达式中的 LVal
-        LVal lVal = findLValInExpression(exp);
-
-        if (lVal != null) {
-            // 如果 LVal 有索引（数组访问），返回 INT（数组元素类型）
-            if (lVal.isArrayAccess()) {
-                return SymbolType.INT;
-            }
-
-            // 如果 LVal 没有索引，查找符号表确定类型
-            if (lVal.getIdent() != null) {
-                String name = lVal.getIdent().getName();
-                Symbol symbol = symbolManager.lookupSymbol(name);
-
-                if (symbol instanceof VariableSymbol varSymbol) {
-                    SymbolType type = varSymbol.getType();
-                    // 如果是数组类型，返回数组类型；否则返回 INT
-                    if (type.isArray()) {
-                        return type;
-                    } else {
-                        return SymbolType.INT;
-                    }
-                }
+        // 对于其他 Exp 类型，分析其子节点
+        for (ASTNode child : exp.getChildren()) {
+            // 优先分析第一个有意义的子节点
+            if (child instanceof AddExp || child instanceof MulExp ||
+                    child instanceof UnaryExp ||
+                    child instanceof LOrExp || child instanceof LAndExp ||
+                    child instanceof EqExp || child instanceof RelExp) {
+                return getExpressionTypeFromNode(child);
             }
         }
 
-        // 默认返回 INT（数字、函数调用结果等）
         return SymbolType.INT;
     }
 
     /**
-     * 在表达式中查找 LVal 节点
-     * 如果表达式中包含 LVal，返回最左边的 LVal
+     * 从任意 AST 节点推导表达式类型
      */
-    private LVal findLValInExpression(ASTNode node) {
+    private SymbolType getExpressionTypeFromNode(ASTNode node) {
         if (node == null) {
-            return null;
-        }
-        // 递归查找子节点中的 LVal
-        for (ASTNode child : node.getChildren()) {
-            if (child instanceof LVal lVal) {
-                return lVal;
-            } else {
-                // 递归查找子表达式
-                LVal lVal = findLValInExpression(child);
-                if (lVal != null) {
-                    return lVal;
-                }
-            }
+            return SymbolType.VOID;
         }
 
-        return null;
+        if (node instanceof RecursionNode recursionNode) {
+            return getRecursionNodeType(recursionNode);
+        }
+
+        // UnaryExp：需要分析具体形式
+        if (node instanceof UnaryExp unaryExp) {
+            return getUnaryExpType(unaryExp);
+        }
+
+        // Exp 类型节点
+        if (node instanceof ParserWrapper.ExpWrapper exp) {
+            return getExpressionType(exp);
+        }
+
+        return SymbolType.INT;
+    }
+
+    private SymbolType getRecursionNodeType(RecursionNode recursionNode) {
+        List<ASTNode> operands = recursionNode.getOperands();
+
+        // 没有操作数，返回默认值
+        if (operands == null || operands.isEmpty()) {
+            return SymbolType.VOID;
+        }
+
+        // 只有一个操作数,不是真正的运算
+        // 例如: Exp -> AddExp -> MulExp -> UnaryExp -> ... -> LVal(array)
+        if (operands.size() == 1) {
+            return getExpressionTypeFromNode(operands.get(0));
+        }
+
+        // 多个操作数 → 有运算符，这是真正的运算表达式
+        // 例如: a + b, a * b, a && b, a == b 等，运算结果总是 INT
+        return SymbolType.INT;
+    }
+
+    /**
+     * 获取 UnaryExp 的类型
+     */
+    private SymbolType getUnaryExpType(UnaryExp unaryExp) {
+        // 函数调用：SysY 中函数只能返回 INT 或 VOID，这里返回 INT
+        if (unaryExp.isFunctionCall()) {
+            // 可以进一步查符号表获取函数返回类型，但 SysY 中返回值函数都是 int
+            if (unaryExp.getFuncName() != null) {
+                Symbol symbol = symbolManager.lookupSymbol(unaryExp.getFuncName().getName());
+                if (symbol instanceof FunctionSymbol funcSymbol) {
+                    // 如果是 void 函数，理论上不应该在表达式中使用，这里还是返回 INT
+                    return funcSymbol.getReturnType();
+                }
+            }
+            return SymbolType.INT;
+        }
+
+        // 一元运算 (+exp, -exp, !exp)：结果总是 INT
+        if (unaryExp.isUnary()) {
+            return SymbolType.INT;
+        }
+
+        // PrimaryExp：需要进一步分析
+        if (unaryExp.isPrimary() && unaryExp.getPrimaryExp() != null) {
+            return getPrimaryExpType(unaryExp.getPrimaryExp());
+        }
+
+        return SymbolType.INT;
+    }
+
+    /**
+     * 获取 PrimaryExp 的类型
+     */
+    private SymbolType getPrimaryExpType(PrimaryExp primaryExp) {
+        ASTNode primary = primaryExp.getPrimary();
+        if (primary == null) {
+            return SymbolType.VOID;
+        }
+
+        // Number：数字字面量，类型是 INT
+        if (primary instanceof Number) {
+            return SymbolType.INT;
+        }
+
+        // LVal：需要查符号表
+        if (primary instanceof LVal lVal) {
+            return getLValType(lVal);
+        }
+
+        // (Exp)：递归分析括号内的表达式
+        if (primary instanceof Exp exp) {
+            return getExpressionType(exp);
+        }
+
+        return SymbolType.INT;
+    }
+
+    /**
+     * 获取 LVal 的类型
+     */
+    private SymbolType getLValType(LVal lVal) {
+        if (lVal == null || lVal.getIdent() == null) {
+            return SymbolType.INT;
+        }
+
+        String name = lVal.getIdent().getName();
+        Symbol symbol = symbolManager.lookupSymbol(name);
+
+        if (!(symbol instanceof VariableSymbol varSymbol)) {
+            return SymbolType.INT;
+        }
+
+        SymbolType baseType = varSymbol.getType();
+
+        // 如果是数组访问 (a[i])，返回数组元素类型 INT
+        if (lVal.isArrayAccess()) {
+            return SymbolType.INT;
+        }
+
+        // 如果没有索引，直接返回变量本身的类型
+        // - 普通变量：INT 或 CONST_INT
+        // - 数组变量：INT_ARRAY 或 CONST_INT_ARRAY
+        return baseType;
     }
 
     /**

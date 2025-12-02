@@ -1,5 +1,7 @@
 package midend.semantic;
 
+import midend.llvm.value.IrValue;
+
 /**
  * 符号基类
  * 表示符号表中的条目，可以是变量、常量或函数
@@ -8,11 +10,21 @@ public abstract class Symbol {
     protected final String name;
     protected final SymbolType type;
     protected final int lineNumber;
+    protected IrValue irValue;
 
     public Symbol(String name, SymbolType type, int lineNumber) {
         this.name = name;
         this.type = type;
         this.lineNumber = lineNumber;
+        this.irValue = null;
+    }
+
+    public void setIrValue(IrValue irValue) {
+        this.irValue = irValue;
+    }
+
+    public IrValue getIrValue() {
+        return irValue;
     }
 
     public String getName() {

@@ -8,7 +8,7 @@ import java.util.List;
  */
 public class ConstInitVal extends AbstractASTNode {
     private boolean isArray;
-    private List<ConstExp> constExpList = new ArrayList<>();
+    private final List<ConstExp> constExpList = new ArrayList<>();
     
     public ConstInitVal() {
         super(SyntaxType.CONST_INIT_VAL);
@@ -34,7 +34,7 @@ public class ConstInitVal extends AbstractASTNode {
     /**
      * 获取常量表达式列表
      */
-    public List<ConstExp> getConstExp() {
+    public List<ConstExp> getConstExpList() {
         return constExpList;
     }
 

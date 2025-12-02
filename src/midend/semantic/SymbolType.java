@@ -46,7 +46,7 @@ public enum SymbolType {
     }
 
     /**
-     * 获取基础类型（去除const和array修饰）
+     * 获取基础类型（去除const和function修饰）
      */
     public SymbolType getBaseType() {
         switch (this) {
