@@ -17,6 +17,11 @@ public class IrArrayType extends IrType{
         return elementType;
     }
 
+    public int getSize() {
+        // 数组大小 = 元素个数 × 每个元素的大小
+        return arraySize * elementType.getSize();
+    }
+
     @Override
     public boolean isArrayType() {
         return true;

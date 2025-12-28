@@ -113,7 +113,7 @@ public class ConstExpEvaluator {
 
     public static int evalLVal(LVal lVal) {
         String name = lVal.getIdent().getName();
-        Symbol symbol = SymbolManager.getInstance().getCurrentTable().lookupWithIrValue(name);
+        Symbol symbol = SymbolManager.getInstance().getCurrentTable().lookup(name);
 
         if (symbol instanceof VariableSymbol varSymbol) {
             if (varSymbol.isConst()) {

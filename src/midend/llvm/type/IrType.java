@@ -8,6 +8,8 @@ public abstract class IrType {
     public boolean isVoidType(){return false;}
     public boolean isPointerType(){return false;}
 
+    public abstract int getSize();
+
     @Override
     public abstract String toString();
 }

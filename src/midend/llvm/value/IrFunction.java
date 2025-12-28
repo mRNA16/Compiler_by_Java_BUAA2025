@@ -8,18 +8,25 @@ import midend.llvm.instr.ctrl.ReturnInstr;
 import midend.llvm.type.IrFunctionType;
 import midend.llvm.type.IrType;
 
+import backend.mips.MipsBuilder;
+import backend.mips.Register;
+import backend.mips.assembly.MipsLabel;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class IrFunction extends IrValue{
+public class IrFunction extends IrValue {
     private final List<IrParameter> parameters;
     private final List<IrBasicBlock> basicBlocks;
+    private final HashMap<IrValue, Register> valueRegisterMap;
 
-    public IrFunction(String name,IrType returnType) {
-        super(new IrFunctionType(returnType),name);
+    public IrFunction(String name, IrType returnType) {
+        super(new IrFunctionType(returnType), name);
         this.parameters = new ArrayList<>();
         this.basicBlocks = new ArrayList<>();
+        this.valueRegisterMap = new HashMap<>();
     }
 
     public void addParameter(IrParameter parameter) {
@@ -39,7 +46,7 @@ public class IrFunction extends IrValue{
     }
 
     public IrType getReturnType() {
-        return ((IrFunctionType)this.irType).getReturnType();
+        return ((IrFunctionType) this.irType).getReturnType();
     }
 
     public IrBasicBlock getEntryBlock() {
@@ -52,11 +59,11 @@ public class IrFunction extends IrValue{
 
     public void promiseReturn() {
         IrBasicBlock basicBlock = IrBuilder.getCurrentBasicBlock();
-        if(!basicBlock.hasTerminator()){
+        if (!basicBlock.hasTerminator()) {
             IrValue returnValue = null;
-            if(this.getReturnType().isInt8Type()){
+            if (this.getReturnType().isInt8Type()) {
                 returnValue = new IrConstChar(0);
-            } else if(this.getReturnType().isInt32Type()){
+            } else if (this.getReturnType().isInt32Type()) {
                 returnValue = new IrConstInt(0);
             }
             // TODO:这里暂且不进行类型转换，应该不会出问题
@@ -64,7 +71,7 @@ public class IrFunction extends IrValue{
         }
     }
 
-    public void skipBlankBlock(){
+    public void skipBlankBlock() {
         for (int i = 0; i < basicBlocks.size(); i++) {
             IrBasicBlock block = basicBlocks.get(i);
             if (block.isEmpty()) {
@@ -73,19 +80,41 @@ public class IrFunction extends IrValue{
         }
     }
 
+    public HashMap<IrValue, Register> getValueRegisterMap() {
+        return this.valueRegisterMap;
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
         builder.append("define dso_local ").append(getReturnType()).append(" ").append(irName);
         // 参数声明
         builder.append("(");
-        builder.append(parameters.stream().map(IrParameter::toString).
-                collect(Collectors.joining(", ")));
+        builder.append(parameters.stream().map(IrParameter::toString).collect(Collectors.joining(", ")));
         builder.append(") {\n");
         // 语句声明
-        builder.append(basicBlocks.stream().map(IrBasicBlock::toString).
-                collect(Collectors.joining("\n")));
+        builder.append(basicBlocks.stream().map(IrBasicBlock::toString).collect(Collectors.joining("\n")));
         builder.append("\n}");
         return builder.toString();
+    }
+
+    @Override
+    public void toMips() {
+        new MipsLabel(this.getMipsLabel());
+        MipsBuilder.setCurrentFunction(this);
+
+        for (int i = 0; i < this.parameters.size(); i++) {
+            // 为前三个参数分配寄存器
+            if (i < 3) {
+                MipsBuilder.allocateRegForParam(this.parameters.get(i),
+                        Register.get(Register.A0.ordinal() + i + 1));
+            }
+            // 在运行栈上分配空间
+            MipsBuilder.allocateStackForValue(this.parameters.get(i));
+        }
+
+        for (IrBasicBlock irBasicBlock : this.basicBlocks) {
+            irBasicBlock.toMips();
+        }
     }
 }

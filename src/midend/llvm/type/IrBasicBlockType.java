@@ -5,6 +5,10 @@ public class IrBasicBlockType extends IrType {
 
     private IrBasicBlockType() {}
 
+    public int getSize() {
+        return 0;
+    }
+
     @Override
     public String toString() {
         return "";

@@ -17,16 +17,22 @@ public class IrValue {
         this.beUsedList = new ArrayList<>();
     }
 
-    public IrType getIrType(){
+    public IrType getIrType() {
         return this.irType;
     }
 
-    public String getIrName(){
+    public String getIrName() {
         return this.irName;
     }
 
-    public void addUse(IrUse use){
+    public void addUse(IrUse use) {
         this.beUsedList.add(use);
     }
 
+    public void toMips() {
+    }
+
+    public String getMipsLabel() {
+        return this.irName.substring(1);
+    }
 }

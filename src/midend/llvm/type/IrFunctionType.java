@@ -11,6 +11,10 @@ public class IrFunctionType extends IrType {
         return this.returnType;
     }
 
+    public int getSize() {
+        return 0;
+    }
+
     @Override
     public String toString() {
         return this.returnType.toString();

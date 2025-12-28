@@ -1,5 +1,11 @@
 package midend.llvm;
 
+import backend.mips.Register;
+import backend.mips.assembly.MipsAnnotation;
+import backend.mips.assembly.MipsJump;
+import backend.mips.assembly.MipsLabel;
+import backend.mips.assembly.MipsSyscall;
+import backend.mips.assembly.fake.MarsLi;
 import midend.llvm.constant.IrConstString;
 import midend.llvm.value.IrFunction;
 import midend.llvm.value.IrGlobalValue;
@@ -42,6 +48,10 @@ public class IrModule extends IrNode{
 
     public List<IrGlobalValue> getGlobalValues() {
         return this.globalValues;
+    }
+
+    public Map<String, IrConstString> getStringConstantMap() {
+        return this.stringConstantMap;
     }
 
     public IrConstString getNewConstantStringIr(String string) {
@@ -93,5 +103,30 @@ public class IrModule extends IrNode{
         }
 
         return builder.toString();
+    }
+
+    public void toMips() {
+        for (IrGlobalValue globalValue : this.globalValues) {
+            globalValue.toMips();
+        }
+        // 字符串放到之后，避免对齐问题
+        for (Map.Entry<String,IrConstString> entry : this.stringConstantMap.entrySet()) {
+            entry.getValue().toMips();
+        }
+
+        // 插入跳转到main函数
+        new MipsAnnotation("jump to main");
+        new MipsJump(MipsJump.JumpType.JAL, "main");
+        new MipsJump(MipsJump.JumpType.J, "end");
+
+        for (IrFunction irFunction : this.functions) {
+            irFunction.toMips();
+        }
+
+        // 设置标签
+        new MipsLabel("end");
+        // 设置syscall
+        new MarsLi(Register.V0, 10);
+        new MipsSyscall();
     }
 }

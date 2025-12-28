@@ -4,11 +4,13 @@ import midend.llvm.instr.Instr;
 import midend.llvm.instr.ctrl.ReturnInstr;
 import midend.llvm.type.IrBasicBlockType;
 
+import backend.mips.assembly.MipsLabel;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class IrBasicBlock extends IrValue{
+public class IrBasicBlock extends IrValue {
     private final IrFunction function;
     private final List<Instr> instructions;
 
@@ -32,21 +34,34 @@ public class IrBasicBlock extends IrValue{
         return instructions;
     }
 
-    public boolean isEmpty(){
+    public boolean isEmpty() {
         return instructions.isEmpty();
     }
 
-    public boolean hasTerminator(){
-        if(instructions.isEmpty()){
+    public boolean hasTerminator() {
+        if (instructions.isEmpty()) {
             return false;
         }
-        return instructions.get(instructions.size()-1) instanceof ReturnInstr;
+        return instructions.get(instructions.size() - 1) instanceof ReturnInstr;
     }
 
     @Override
     public String toString() {
         return irName + ":\n" + instructions.stream()
-                                .map(instr -> "\t" + instr.toString())
-                                .collect(Collectors.joining("\n"));
+                .map(instr -> "\t" + instr.toString())
+                .collect(Collectors.joining("\n"));
+    }
+
+    @Override
+    public String getMipsLabel() {
+        return this.irName;
+    }
+
+    @Override
+    public void toMips() {
+        new MipsLabel(this.getMipsLabel());
+        for (Instr instr : this.instructions) {
+            instr.toMips();
+        }
     }
 }

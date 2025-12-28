@@ -1,5 +1,6 @@
 package utils;
 
+import backend.BackEnd;
 import error.Error;
 import error.ErrorRecorder;
 import frontend.FrontEnd;
@@ -24,6 +25,8 @@ public class IOhelper {
     private static FileOutputStream parserOutput = null;
     private static FileOutputStream symbolOutputFile = null;
     private static FileOutputStream llvmOutputFile = null;
+    private static FileOutputStream mipsOutputFile = null;
+
 
     // 分离类加载和流初始化
     public static void initialIO() throws IOException {
@@ -33,6 +36,7 @@ public class IOhelper {
         parserOutput = new FileOutputStream("parser.txt");
         symbolOutputFile = new FileOutputStream("symbol.txt");
         llvmOutputFile = new FileOutputStream("llvm_ir.txt");
+        mipsOutputFile = new FileOutputStream("mips.txt");
     }
 
     // 获得输入流
@@ -73,5 +77,9 @@ public class IOhelper {
 
     public static void printLLVMIR() throws IOException {
         llvmOutputFile.write(MidEnd.getIrModule().toString().getBytes());
+    }
+
+    public static void printMips() throws IOException {
+        mipsOutputFile.write(BackEnd.getMipsCode().getBytes());
     }
 }

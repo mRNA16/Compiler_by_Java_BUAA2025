@@ -1,5 +1,6 @@
 package midend.llvm.instr;
 
+import backend.mips.assembly.MipsAnnotation;
 import midend.llvm.IrBuilder;
 import midend.llvm.type.IrType;
 import midend.llvm.use.IrUser;
@@ -9,7 +10,7 @@ public abstract class Instr extends IrUser {
     private IrBasicBlock block;
     private final InstrType instrType;
 
-    public Instr(IrType irType,InstrType instrType) {
+    public Instr(IrType irType, InstrType instrType) {
         super(irType, IrBuilder.getLocalVarNameIr());
         this.instrType = instrType;
         IrBuilder.addInstr(this);
@@ -24,7 +25,8 @@ public abstract class Instr extends IrUser {
     public Instr(IrType irType, InstrType instrType, String irName, boolean auto) {
         super(irType, irName);
         this.instrType = instrType;
-        if(auto) IrBuilder.addInstr(this);
+        if (auto)
+            IrBuilder.addInstr(this);
     }
 
     public void setBlock(IrBasicBlock block) {
@@ -41,4 +43,8 @@ public abstract class Instr extends IrUser {
 
     @Override
     public abstract String toString();
+
+    public void toMips() {
+        new MipsAnnotation(this.toString());
+    }
 }

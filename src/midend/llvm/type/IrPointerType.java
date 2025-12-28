@@ -11,6 +11,10 @@ public class IrPointerType extends IrType{
         return targetType;
     }
 
+    public int getSize() {
+        return 4;
+    }
+
     @Override
     public boolean isPointerType() {
         return true;

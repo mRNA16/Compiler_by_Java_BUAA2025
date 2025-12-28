@@ -18,6 +18,15 @@ public class IrBaseType extends IrType{
         this.baseType = baseType;
     }
 
+    public int getSize() {
+        return switch (baseType) {
+            case VOID -> 0; // void类型大小为0
+            case INT1 -> 1; // i1类型占1字节
+            case INT8 -> 1; // i8类型占1字节
+            case INT32 -> 4; // i32类型占4字节
+        };
+    }
+
     @Override
     public boolean isInt1Type(){
         return baseType == BaseType.INT1;
