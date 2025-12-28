@@ -34,7 +34,7 @@ public class LoadInstr extends Instr {
         if (pointer instanceof IrGlobalValue) {
             new MipsLsu(MipsLsu.LsuType.LW, rd, pointer.getMipsLabel());
         } else if (pointer instanceof AllocateInstr) {
-            Integer offset = MipsBuilder.getStackValueOffset(pointer);
+            Integer offset = MipsBuilder.getAllocaDataOffset(pointer);
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.LW, rd, Register.SP, offset);
             }

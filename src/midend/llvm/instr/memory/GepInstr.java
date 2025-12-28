@@ -93,7 +93,7 @@ public class GepInstr extends Instr {
             new MipsLsu(MipsLsu.LsuType.LA, rd, pointer.getMipsLabel());
             new MipsAlu(MipsAlu.AluType.ADDU, rd, rd, offReg);
         } else if (pointer instanceof AllocateInstr) {
-            Integer baseOffset = MipsBuilder.getStackValueOffset(pointer);
+            Integer baseOffset = MipsBuilder.getAllocaDataOffset(pointer);
             if (baseOffset != null) {
                 new MipsAlu(MipsAlu.AluType.ADDIU, rd, Register.SP, baseOffset);
                 new MipsAlu(MipsAlu.AluType.ADDU, rd, rd, offReg);

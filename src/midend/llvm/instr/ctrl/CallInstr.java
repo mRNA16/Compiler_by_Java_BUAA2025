@@ -69,25 +69,19 @@ public class CallInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
-        // 现场信息
-        int currentOffset = MipsBuilder.getCurrentStackOffset();
         List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
         // 保护现场
-        saveCurrent(currentOffset, allocatedRegisterList);
+        saveCurrent(allocatedRegisterList);
 
         // 将参数填入对应位置
-        fillParams(args, currentOffset, allocatedRegisterList);
-        currentOffset = currentOffset - 4 * allocatedRegisterList.size() - 8;
+        fillParams(args, allocatedRegisterList);
 
-        // 设置新的栈地址
-        new MipsAlu(MipsAlu.AluType.ADDI, Register.SP, Register.SP, currentOffset);
         // 跳转到函数
         new MipsJump(MipsJump.JumpType.JAL, function.getMipsLabel());
 
         // 恢复现场
-        currentOffset = currentOffset + 4 * allocatedRegisterList.size() + 8;
-        recoverCurrent(currentOffset, allocatedRegisterList);
+        recoverCurrent(allocatedRegisterList);
 
         // 处理返回值
         if (!function.getReturnType().isVoidType()) {
@@ -107,70 +101,44 @@ public class CallInstr extends Instr {
         }
     }
 
-    private void saveCurrent(int currentOffset, List<Register> allocatedRegisterList) {
-        int registerNum = 0;
-        for (Register register : allocatedRegisterList) {
-            registerNum++;
-            new MipsLsu(MipsLsu.LsuType.SW, register, Register.SP,
-                    currentOffset - registerNum * 4);
+    private void saveCurrent(List<Register> allocatedRegisterList) {
+        int baseOffset = MipsBuilder.getRegSaveOffset();
+        for (int i = 0; i < allocatedRegisterList.size(); i++) {
+            new MipsLsu(MipsLsu.LsuType.SW, allocatedRegisterList.get(i), Register.SP,
+                    baseOffset - (i + 1) * 4);
         }
-        // 保存SP寄存器和RA寄存器
-        new MipsLsu(MipsLsu.LsuType.SW, Register.SP, Register.SP,
-                currentOffset - registerNum * 4 - 4);
-        new MipsLsu(MipsLsu.LsuType.SW, Register.RA, Register.SP,
-                currentOffset - registerNum * 4 - 8);
     }
 
-    private void fillParams(List<IrValue> paramList, int currentOffset, List<Register> allocatedRegisterList) {
+    private void fillParams(List<IrValue> paramList, List<Register> allocatedRegisterList) {
+        int regSaveBase = MipsBuilder.getRegSaveOffset();
         for (int i = 0; i < paramList.size(); i++) {
             IrValue param = paramList.get(i);
             if (i < 3) {
                 Register paramRegister = Register.get(Register.A0.ordinal() + i + 1);
-                if (param instanceof IrParameter) {
-                    Register paraRegister = MipsBuilder.getValueToRegister(param);
-                    if (allocatedRegisterList.contains(paraRegister)) {
-                        new MipsLsu(MipsLsu.LsuType.LW, paramRegister, Register.SP,
-                                currentOffset - 4 * allocatedRegisterList.indexOf(paraRegister) - 4);
-                    } else {
-                        loadValueToRegister(param, paramRegister);
-                    }
-                } else {
-                    loadValueToRegister(param, paramRegister);
-                }
+                loadValueToRegister(param, paramRegister, regSaveBase, allocatedRegisterList);
             } else {
                 Register tempRegister = Register.K0;
-                if (param instanceof IrParameter) {
-                    Register paraRegister = MipsBuilder.getValueToRegister(param);
-                    if (allocatedRegisterList.contains(paraRegister)) {
-                        new MipsLsu(MipsLsu.LsuType.LW, tempRegister, Register.SP,
-                                currentOffset - 4 * allocatedRegisterList.indexOf(paraRegister) - 4);
-                    } else {
-                        loadValueToRegister(param, tempRegister);
-                    }
-                } else {
-                    loadValueToRegister(param, tempRegister);
-                }
-                new MipsLsu(MipsLsu.LsuType.SW, tempRegister, Register.SP,
-                        currentOffset - 4 * allocatedRegisterList.size() - 8 - 4 * i - 4);
+                loadValueToRegister(param, tempRegister, regSaveBase, allocatedRegisterList);
+                // 参数 4+ 存放在栈顶起始位置 (0, 4, 8, 12, 16...)
+                new MipsLsu(MipsLsu.LsuType.SW, tempRegister, Register.SP, i * 4);
             }
         }
     }
 
-    private void recoverCurrent(int formerOffset, List<Register> allocatedRegisterList) {
-        new MipsLsu(MipsLsu.LsuType.LW, Register.RA, Register.SP, 0);
-        new MipsLsu(MipsLsu.LsuType.LW, Register.SP, Register.SP, 4);
-
-        int registerNum = 0;
-        for (Register register : allocatedRegisterList) {
-            registerNum++;
-            new MipsLsu(MipsLsu.LsuType.LW, register, Register.SP,
-                    formerOffset - registerNum * 4);
+    private void recoverCurrent(List<Register> allocatedRegisterList) {
+        int baseOffset = MipsBuilder.getRegSaveOffset();
+        for (int i = 0; i < allocatedRegisterList.size(); i++) {
+            new MipsLsu(MipsLsu.LsuType.LW, allocatedRegisterList.get(i), Register.SP,
+                    baseOffset - (i + 1) * 4);
         }
     }
 
-    private void loadValueToRegister(IrValue value, Register reg) {
+    private void loadValueToRegister(IrValue value, Register reg, int regSaveBase,
+            List<Register> allocatedRegisterList) {
         Register srcReg = MipsBuilder.getValueToRegister(value);
         if (srcReg != null) {
+            // 如果该值当前在寄存器中，且该寄存器被保护了，需要从保护区加载？
+            // 不，在 saveCurrent 之后，寄存器的值还在寄存器里，可以直接 move
             if (srcReg != reg) {
                 new MarsMove(reg, srcReg);
             }

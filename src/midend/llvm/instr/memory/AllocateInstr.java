@@ -31,21 +31,18 @@ public class AllocateInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
-        if (this.targetType instanceof IrArrayType irArrayType) {
-            MipsBuilder.allocateStackSpace(4 * irArrayType.getArraySize());
-        } else {
-            MipsBuilder.allocateStackSpace(4);
-        }
+        // 获取预分配的数据块偏移
+        Integer dataOffset = MipsBuilder.getAllocaDataOffset(this);
 
-        // 紧随其后创建指针
-        int pointerOffset = MipsBuilder.getCurrentStackOffset();
         Register register = MipsBuilder.getValueToRegister(this);
         if (register != null) {
-            new MipsAlu(MipsAlu.AluType.ADDI, register, Register.SP, pointerOffset);
+            new MipsAlu(MipsAlu.AluType.ADDIU, register, Register.SP, dataOffset);
         } else {
-            new MipsAlu(MipsAlu.AluType.ADDI, Register.K0, Register.SP, pointerOffset);
-            pointerOffset = MipsBuilder.allocateStackForValue(this);
-            new MipsLsu(MipsLsu.LsuType.SW, Register.K0, Register.SP, pointerOffset);
+            new MipsAlu(MipsAlu.AluType.ADDIU, Register.K0, Register.SP, dataOffset);
+            Integer pointerOffset = MipsBuilder.getStackValueOffset(this);
+            if (pointerOffset != null) {
+                new MipsLsu(MipsLsu.LsuType.SW, Register.K0, Register.SP, pointerOffset);
+            }
         }
     }
 }

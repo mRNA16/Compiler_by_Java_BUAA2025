@@ -8,10 +8,10 @@ import midend.llvm.constant.IrConstInt;
 
 import backend.mips.MipsBuilder;
 import backend.mips.Register;
-import backend.mips.assembly.MipsJump;
-import backend.mips.assembly.fake.MarsMove;
 import backend.mips.assembly.MipsAlu;
 import backend.mips.assembly.MipsLsu;
+import backend.mips.assembly.MipsJump;
+import backend.mips.assembly.fake.MarsMove;
 
 public class ReturnInstr extends Instr {
     private IrValue returnValue;
@@ -48,6 +48,15 @@ public class ReturnInstr extends Instr {
                 }
             }
         }
+
+        int frameSize = MipsBuilder.getFrameSize();
+        if (frameSize > 0) {
+            // 恢复 RA 寄存器
+            new MipsLsu(MipsLsu.LsuType.LW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+            // 恢复 SP 寄存器
+            new MipsAlu(MipsAlu.AluType.ADDIU, Register.SP, Register.SP, frameSize);
+        }
+
         new MipsJump(MipsJump.JumpType.JR, Register.RA);
     }
 }

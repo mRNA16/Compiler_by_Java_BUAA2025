@@ -10,6 +10,8 @@ import midend.llvm.type.IrType;
 
 import backend.mips.MipsBuilder;
 import backend.mips.Register;
+import backend.mips.assembly.MipsAlu;
+import backend.mips.assembly.MipsLsu;
 import backend.mips.assembly.MipsLabel;
 
 import java.util.ArrayList;
@@ -103,14 +105,19 @@ public class IrFunction extends IrValue {
         new MipsLabel(this.getMipsLabel());
         MipsBuilder.setCurrentFunction(this);
 
+        int frameSize = MipsBuilder.getFrameSize();
+        if (frameSize > 0) {
+            new MipsAlu(MipsAlu.AluType.ADDIU, Register.SP, Register.SP, -frameSize);
+            // 保存 RA 寄存器
+            new MipsLsu(MipsLsu.LsuType.SW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+        }
+
         for (int i = 0; i < this.parameters.size(); i++) {
             // 为前三个参数分配寄存器
             if (i < 3) {
                 MipsBuilder.allocateRegForParam(this.parameters.get(i),
                         Register.get(Register.A0.ordinal() + i + 1));
             }
-            // 在运行栈上分配空间
-            MipsBuilder.allocateStackForValue(this.parameters.get(i));
         }
 
         for (IrBasicBlock irBasicBlock : this.basicBlocks) {

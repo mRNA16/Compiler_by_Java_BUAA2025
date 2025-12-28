@@ -58,7 +58,7 @@ public class StoreInstr extends Instr {
         if (address instanceof IrGlobalValue) {
             new MipsLsu(MipsLsu.LsuType.SW, rs, address.getMipsLabel());
         } else if (address instanceof AllocateInstr) {
-            Integer offset = MipsBuilder.getStackValueOffset(address);
+            Integer offset = MipsBuilder.getAllocaDataOffset(address);
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.SW, rs, Register.SP, offset);
             }
