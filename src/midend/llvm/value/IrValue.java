@@ -2,6 +2,7 @@ package midend.llvm.value;
 
 import midend.llvm.type.IrType;
 import midend.llvm.use.IrUse;
+import midend.llvm.use.IrUser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,10 @@ public class IrValue {
 
     public void addUse(IrUse use) {
         this.beUsedList.add(use);
+    }
+
+    public void deleteUser(IrUser user) {
+        this.beUsedList.removeIf(use -> use.getUser() == user);
     }
 
     public void toMips() {

@@ -1,12 +1,15 @@
 package midend.llvm.value;
 
 import midend.llvm.instr.Instr;
+import midend.llvm.instr.ctrl.BrCondInstr;
+import midend.llvm.instr.ctrl.BrInstr;
 import midend.llvm.instr.ctrl.ReturnInstr;
 import midend.llvm.type.IrBasicBlockType;
 
 import backend.mips.assembly.MipsLabel;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,7 +45,69 @@ public class IrBasicBlock extends IrValue {
         if (instructions.isEmpty()) {
             return false;
         }
-        return instructions.get(instructions.size() - 1) instanceof ReturnInstr;
+        Instr last = instructions.get(instructions.size() - 1);
+        return last instanceof ReturnInstr || last instanceof BrInstr || last instanceof BrCondInstr;
+    }
+
+    public Instr getLastInstr() {
+        if (instructions.isEmpty()) {
+            return null;
+        }
+        return instructions.get(instructions.size() - 1);
+    }
+
+    private final ArrayList<IrBasicBlock> beforeBlocks = new ArrayList<>();
+    private final ArrayList<IrBasicBlock> nextBlocks = new ArrayList<>();
+    private final HashSet<IrBasicBlock> dominatorBlocks = new HashSet<>();
+    private final HashSet<IrBasicBlock> dominateFrontier = new HashSet<>();
+    private IrBasicBlock directDominator = null;
+
+    public void addNextBlock(IrBasicBlock block) {
+        this.nextBlocks.add(block);
+    }
+
+    public void addBeforeBlock(IrBasicBlock block) {
+        this.beforeBlocks.add(block);
+    }
+
+    public ArrayList<IrBasicBlock> getNextBlocks() {
+        return nextBlocks;
+    }
+
+    public ArrayList<IrBasicBlock> getBeforeBlocks() {
+        return beforeBlocks;
+    }
+
+    public void addDominator(IrBasicBlock block) {
+        this.dominatorBlocks.add(block);
+    }
+
+    public HashSet<IrBasicBlock> getDominatorBlocks() {
+        return dominatorBlocks;
+    }
+
+    public void setDirectDominator(IrBasicBlock block) {
+        this.directDominator = block;
+    }
+
+    public IrBasicBlock getDirectDominator() {
+        return directDominator;
+    }
+
+    public void addDominateFrontier(IrBasicBlock block) {
+        this.dominateFrontier.add(block);
+    }
+
+    public HashSet<IrBasicBlock> getDominateFrontier() {
+        return dominateFrontier;
+    }
+
+    public void clearCfg() {
+        this.beforeBlocks.clear();
+        this.nextBlocks.clear();
+        this.dominatorBlocks.clear();
+        this.dominateFrontier.clear();
+        this.directDominator = null;
     }
 
     @Override
