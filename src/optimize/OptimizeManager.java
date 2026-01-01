@@ -18,13 +18,17 @@ public class OptimizeManager {
         this.optimizers.add(new CfgBuilder());
         // MemToReg 需要在 CfgBuilder 构建完支配信息后执行
         this.optimizers.add(new MemToReg());
-        // 常量传播
-        this.optimizers.add(new ConstantPropagation());
-        // 常量传播后可能产生新的不可达代码
-        this.optimizers.add(new RemoveUnReachCode());
-        // 死代码删除
-        this.optimizers.add(new DeadCodeElimination());
-        // RemovePhi 需要在 MemToReg 之后执行，将 Phi 指令转换为 Move 指令
+
+        // 迭代优化：LVN, 常量传播, 死代码删除, 不可达代码删除
+        for (int i = 0; i < 3; i++) {
+            this.optimizers.add(new Lvn());
+            this.optimizers.add(new ConstantPropagation());
+            this.optimizers.add(new DeadCodeElimination());
+            this.optimizers.add(new RemoveUnReachCode());
+            this.optimizers.add(new CfgBuilder()); // 维护最新的 CFG 和支配信息
+        }
+
+        // RemovePhi 需要在所有 SSA 优化完成后执行
         this.optimizers.add(new RemovePhi());
     }
 
