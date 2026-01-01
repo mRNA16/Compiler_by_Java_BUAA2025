@@ -48,6 +48,10 @@ public class MipsBuilder {
         preAllocateFrame(irFunction);
     }
 
+    public static IrFunction getCurrentFunction() {
+        return currentFunction;
+    }
+
     private static void preAllocateFrame(IrFunction irFunction) {
         stackOffset = 0;
         stackOffsetValueMap = new HashMap<>();
@@ -70,6 +74,12 @@ public class MipsBuilder {
 
                     if (valueRegisterMap.get(instr) == null) {
                         allocateStackForValue(instr);
+                    }
+                } else if (instr instanceof midend.llvm.instr.MoveInstr moveInstr) {
+                    // MoveInstr 的目标值需要分配栈空间（来自 Phi 指令）
+                    IrValue dstValue = moveInstr.getDstValue();
+                    if (valueRegisterMap.get(dstValue) == null && !stackOffsetValueMap.containsKey(dstValue)) {
+                        allocateStackForValue(dstValue);
                     }
                 } else if (!instr.getIrType().isVoidType() && valueRegisterMap.get(instr) == null) {
                     allocateStackForValue(instr);

@@ -37,7 +37,11 @@ public class CallInstr extends Instr {
     }
 
     public List<IrValue> getArgs() {
-        return args;
+        List<IrValue> actualArgs = new ArrayList<>();
+        for (int i = 1; i < this.getUseValueList().size(); i++) {
+            actualArgs.add(this.getUseValueList().get(i));
+        }
+        return actualArgs;
     }
 
     @Override
@@ -74,8 +78,14 @@ public class CallInstr extends Instr {
         // 保护现场
         saveCurrent(allocatedRegisterList);
 
+        // 从 useValueList 获取实际参数（第一个元素是函数，参数从索引1开始）
+        List<IrValue> actualArgs = new ArrayList<>();
+        for (int i = 1; i < this.getUseValueList().size(); i++) {
+            actualArgs.add(this.getUseValueList().get(i));
+        }
+
         // 将参数填入对应位置
-        fillParams(args, allocatedRegisterList);
+        fillParams(actualArgs, allocatedRegisterList);
 
         // 跳转到函数
         new MipsJump(MipsJump.JumpType.JAL, function.getMipsLabel());

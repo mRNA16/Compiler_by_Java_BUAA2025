@@ -15,7 +15,7 @@ public class Compiler {
     private final static boolean NEED_PARSER_OUTPUT = true;
     private final static boolean NEED_LLVM_IR_OUTPUT = true;
     private final static boolean NEED_MIPS_OUTPUT = true;
-    private final static boolean NEED_OPTIMIZE = false;
+    private final static boolean NEED_OPTIMIZE = true;
     private final static boolean ALL_OUTPUT = true;
 
     public static void main(String[] args) throws IOException {

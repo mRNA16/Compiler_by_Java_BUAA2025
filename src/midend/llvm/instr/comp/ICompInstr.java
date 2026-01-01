@@ -40,11 +40,11 @@ public class ICompInstr extends Instr {
     }
 
     public IrValue getL() {
-        return L;
+        return this.getUseValueList().get(0);
     }
 
     public IrValue getR() {
-        return R;
+        return this.getUseValueList().get(1);
     }
 
     @Override
@@ -67,12 +67,16 @@ public class ICompInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
+        // 从 useValueList 获取真正的操作数，以支持 MemToReg 优化后的值替换
+        IrValue actualL = this.getUseValueList().get(0);
+        IrValue actualR = this.getUseValueList().get(1);
+
         Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
                 : Register.K0;
 
-        Register leftReg = getOperandReg(L, Register.K0);
+        Register leftReg = getOperandReg(actualL, Register.K0);
 
-        if (R instanceof IrConstInt constInt && isAluImm(constInt.getValue())) {
+        if (actualR instanceof IrConstInt constInt && isAluImm(constInt.getValue())) {
             int imm = constInt.getValue();
             if (compType == ICompType.SLT) {
                 new MipsCompare(MipsCompare.CompareType.SLTI, rd, leftReg, imm);
@@ -82,7 +86,7 @@ public class ICompInstr extends Instr {
                 emitCompare(rd, leftReg, rightReg);
             }
         } else {
-            Register rightReg = getOperandReg(R, Register.K1);
+            Register rightReg = getOperandReg(actualR, Register.K1);
             emitCompare(rd, leftReg, rightReg);
         }
 

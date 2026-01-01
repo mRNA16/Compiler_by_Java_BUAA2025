@@ -20,6 +20,10 @@ public class LoadInstr extends Instr {
         this.addUseValue(pointer);
     }
 
+    public IrValue getPointer() {
+        return this.getUseValueList().get(0);
+    }
+
     @Override
     public String toString() {
         return irName + " = load " + irType + ", " + pointer.getIrType() + " " + pointer.getIrName();
@@ -28,23 +32,26 @@ public class LoadInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
+        // 从 useValueList 获取真正的指针操作数，以支持 MemToReg 优化后的值替换
+        IrValue actualPointer = this.getUseValueList().get(0);
+
         Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
                 : Register.K0;
 
-        if (pointer instanceof IrGlobalValue) {
-            new MipsLsu(MipsLsu.LsuType.LW, rd, pointer.getMipsLabel());
-        } else if (pointer instanceof AllocateInstr) {
-            Integer offset = MipsBuilder.getAllocaDataOffset(pointer);
+        if (actualPointer instanceof IrGlobalValue) {
+            new MipsLsu(MipsLsu.LsuType.LW, rd, actualPointer.getMipsLabel());
+        } else if (actualPointer instanceof AllocateInstr) {
+            Integer offset = MipsBuilder.getAllocaDataOffset(actualPointer);
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.LW, rd, Register.SP, offset);
             }
         } else {
-            Register base = MipsBuilder.getValueToRegister(pointer);
+            Register base = MipsBuilder.getValueToRegister(actualPointer);
             if (base != null) {
                 new MipsLsu(MipsLsu.LsuType.LW, rd, base, 0);
             } else {
                 Register temp = Register.K1;
-                Integer offset = MipsBuilder.getStackValueOffset(pointer);
+                Integer offset = MipsBuilder.getStackValueOffset(actualPointer);
                 if (offset != null) {
                     new MipsLsu(MipsLsu.LsuType.LW, temp, Register.SP, offset);
                     new MipsLsu(MipsLsu.LsuType.LW, rd, temp, 0);

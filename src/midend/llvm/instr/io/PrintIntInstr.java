@@ -21,7 +21,7 @@ public class PrintIntInstr extends IOInstr {
     }
 
     public IrValue getPrintValue() {
-        return printValue;
+        return this.getUseValueList().get(0);
     }
 
     @Override
@@ -32,13 +32,15 @@ public class PrintIntInstr extends IOInstr {
     @Override
     public void toMips() {
         super.toMips();
-        Register rs = MipsBuilder.getValueToRegister(printValue);
+        // 使用 getUseValueList() 获取真正的打印值，以支持 MemToReg 优化后的值替换
+        IrValue actualPrintValue = this.getUseValueList().get(0);
+        Register rs = MipsBuilder.getValueToRegister(actualPrintValue);
         if (rs != null) {
             new MarsMove(Register.A0, rs);
-        } else if (printValue instanceof IrConstInt constInt) {
+        } else if (actualPrintValue instanceof IrConstInt constInt) {
             new MipsAlu(MipsAlu.AluType.ADDIU, Register.A0, Register.ZERO, constInt.getValue());
         } else {
-            Integer offset = MipsBuilder.getStackValueOffset(printValue);
+            Integer offset = MipsBuilder.getStackValueOffset(actualPrintValue);
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.LW, Register.A0, Register.SP, offset);
             }

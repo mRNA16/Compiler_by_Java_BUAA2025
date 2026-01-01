@@ -35,11 +35,11 @@ public class GepInstr extends Instr {
     }
 
     public IrValue getPointer() {
-        return pointer;
+        return this.getUseValueList().get(0);
     }
 
     public IrValue getOffset() {
-        return offset;
+        return this.getUseValueList().get(1);
     }
 
     public static IrType getSourceType(IrValue pointer) {
@@ -69,18 +69,22 @@ public class GepInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
+        // 从 useValueList 获取真正的操作数，以支持 MemToReg 优化后的值替换
+        IrValue actualPointer = this.getUseValueList().get(0);
+        IrValue actualOffset = this.getUseValueList().get(1);
+
         Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
                 : Register.K0;
 
         // Calculate offset in bytes: offset * 4
         Register offReg = Register.K1;
-        if (offset instanceof IrConstInt constInt) {
+        if (actualOffset instanceof IrConstInt constInt) {
             new MipsAlu(MipsAlu.AluType.ADDIU, offReg, Register.ZERO, constInt.getValue() * 4);
         } else {
-            Register temp = MipsBuilder.getValueToRegister(offset);
+            Register temp = MipsBuilder.getValueToRegister(actualOffset);
             if (temp == null) {
                 temp = Register.K1;
-                Integer stackOff = MipsBuilder.getStackValueOffset(offset);
+                Integer stackOff = MipsBuilder.getStackValueOffset(actualOffset);
                 if (stackOff != null) {
                     new MipsLsu(MipsLsu.LsuType.LW, temp, Register.SP, stackOff);
                 }
@@ -89,20 +93,20 @@ public class GepInstr extends Instr {
         }
 
         // Calculate base + offset
-        if (pointer instanceof IrGlobalValue) {
-            new MipsLsu(MipsLsu.LsuType.LA, rd, pointer.getMipsLabel());
+        if (actualPointer instanceof IrGlobalValue) {
+            new MipsLsu(MipsLsu.LsuType.LA, rd, actualPointer.getMipsLabel());
             new MipsAlu(MipsAlu.AluType.ADDU, rd, rd, offReg);
-        } else if (pointer instanceof AllocateInstr) {
-            Integer baseOffset = MipsBuilder.getAllocaDataOffset(pointer);
+        } else if (actualPointer instanceof AllocateInstr) {
+            Integer baseOffset = MipsBuilder.getAllocaDataOffset(actualPointer);
             if (baseOffset != null) {
                 new MipsAlu(MipsAlu.AluType.ADDIU, rd, Register.SP, baseOffset);
                 new MipsAlu(MipsAlu.AluType.ADDU, rd, rd, offReg);
             }
         } else {
-            Register base = MipsBuilder.getValueToRegister(pointer);
+            Register base = MipsBuilder.getValueToRegister(actualPointer);
             if (base == null) {
                 base = Register.K0; // Use K0 as temp for base
-                Integer stackOff = MipsBuilder.getStackValueOffset(pointer);
+                Integer stackOff = MipsBuilder.getStackValueOffset(actualPointer);
                 if (stackOff != null) {
                     new MipsLsu(MipsLsu.LsuType.LW, base, Register.SP, stackOff);
                 }

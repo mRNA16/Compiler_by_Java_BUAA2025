@@ -60,6 +60,7 @@ public class IrBasicBlock extends IrValue {
     private final ArrayList<IrBasicBlock> nextBlocks = new ArrayList<>();
     private final HashSet<IrBasicBlock> dominatorBlocks = new HashSet<>();
     private final HashSet<IrBasicBlock> dominateFrontier = new HashSet<>();
+    private final HashSet<IrBasicBlock> directDominateBlocks = new HashSet<>();
     private IrBasicBlock directDominator = null;
 
     public void addNextBlock(IrBasicBlock block) {
@@ -88,10 +89,15 @@ public class IrBasicBlock extends IrValue {
 
     public void setDirectDominator(IrBasicBlock block) {
         this.directDominator = block;
+        block.directDominateBlocks.add(this);
     }
 
     public IrBasicBlock getDirectDominator() {
         return directDominator;
+    }
+
+    public HashSet<IrBasicBlock> getDirectDominateBlocks() {
+        return directDominateBlocks;
     }
 
     public void addDominateFrontier(IrBasicBlock block) {
@@ -102,11 +108,66 @@ public class IrBasicBlock extends IrValue {
         return dominateFrontier;
     }
 
+    /**
+     * 在指定索引处插入指令
+     */
+    public void addInstrAtIndex(Instr instr, int index) {
+        this.instructions.add(index, instr);
+        instr.setBlock(this);
+    }
+
+    /**
+     * 获取第一条指令
+     */
+    public Instr getFirstInstr() {
+        if (instructions.isEmpty()) {
+            return null;
+        }
+        return instructions.get(0);
+    }
+
+    /**
+     * 在跳转指令前插入新指令
+     */
+    public void addInstrBeforeJump(Instr instr) {
+        Instr lastInstr = this.getLastInstr();
+        if (lastInstr instanceof BrInstr || lastInstr instanceof BrCondInstr) {
+            this.instructions.add(this.instructions.size() - 1, instr);
+        } else {
+            this.instructions.add(instr);
+        }
+        instr.setBlock(this);
+    }
+
+    /**
+     * 检查是否包含 ParallelCopy 指令
+     */
+    public boolean hasParallelCopyInstr() {
+        if (this.instructions.size() < 2) {
+            return false;
+        }
+        return this.instructions.get(this.instructions.size() - 2) instanceof midend.llvm.instr.phi.ParallelCopyInstr;
+    }
+
+    /**
+     * 获取并移除 ParallelCopy 指令
+     */
+    public midend.llvm.instr.phi.ParallelCopyInstr getAndRemoveParallelCopyInstr() {
+        if (!hasParallelCopyInstr()) {
+            return null;
+        }
+        midend.llvm.instr.phi.ParallelCopyInstr copyInstr = (midend.llvm.instr.phi.ParallelCopyInstr) this.instructions
+                .get(this.instructions.size() - 2);
+        this.instructions.remove(this.instructions.size() - 2);
+        return copyInstr;
+    }
+
     public void clearCfg() {
         this.beforeBlocks.clear();
         this.nextBlocks.clear();
         this.dominatorBlocks.clear();
         this.dominateFrontier.clear();
+        this.directDominateBlocks.clear();
         this.directDominator = null;
     }
 

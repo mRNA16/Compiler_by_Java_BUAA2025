@@ -25,6 +25,16 @@ public class IrUser extends IrValue {
         return useValueList;
     }
 
+    /**
+     * 将 oldValue 替换为 newValue
+     */
+    public void modifyValue(IrValue oldValue, IrValue newValue) {
+        int index = this.useValueList.indexOf(oldValue);
+        if (index >= 0) {
+            this.useValueList.set(index, newValue);
+        }
+    }
+
     public void removeAllValueUse() {
         for (IrValue value : useValueList) {
             if (value != null) {

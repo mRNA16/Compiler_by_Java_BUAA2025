@@ -35,14 +35,16 @@ public class ReturnInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
-        if (returnValue != null) {
-            Register returnRegister = MipsBuilder.getValueToRegister(returnValue);
+        // 使用 getUseValueList() 获取真正的返回值，以支持 MemToReg 优化后的值替换
+        IrValue actualReturnValue = (this.getUseValueList().isEmpty()) ? null : this.getUseValueList().get(0);
+        if (actualReturnValue != null) {
+            Register returnRegister = MipsBuilder.getValueToRegister(actualReturnValue);
             if (returnRegister != null) {
                 new MarsMove(Register.V0, returnRegister);
-            } else if (returnValue instanceof IrConstInt constInt) {
+            } else if (actualReturnValue instanceof IrConstInt constInt) {
                 new MipsAlu(MipsAlu.AluType.ADDIU, Register.V0, Register.ZERO, constInt.getValue());
             } else {
-                Integer offset = MipsBuilder.getStackValueOffset(returnValue);
+                Integer offset = MipsBuilder.getStackValueOffset(actualReturnValue);
                 if (offset != null) {
                     new MipsLsu(MipsLsu.LsuType.LW, Register.V0, Register.SP, offset);
                 }

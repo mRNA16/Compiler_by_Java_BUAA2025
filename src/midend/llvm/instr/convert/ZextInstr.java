@@ -26,7 +26,7 @@ public class ZextInstr extends Instr {
     }
 
     public IrValue getOriginValue() {
-        return originValue;
+        return this.getUseValueList().get(0);
     }
 
     @Override
@@ -37,19 +37,22 @@ public class ZextInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
+        // 从 useValueList 获取真正的源值，以支持 MemToReg 优化后的值替换
+        IrValue actualOriginValue = this.getUseValueList().get(0);
+
         Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
                 : Register.K0;
 
-        Register rs = MipsBuilder.getValueToRegister(originValue);
+        Register rs = MipsBuilder.getValueToRegister(actualOriginValue);
         if (rs == null) {
             rs = Register.K0;
-            Integer offset = MipsBuilder.getStackValueOffset(originValue);
+            Integer offset = MipsBuilder.getStackValueOffset(actualOriginValue);
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.LW, rs, Register.SP, offset);
             }
         }
 
-        if (originValue.getIrType().isInt8Type()) {
+        if (actualOriginValue.getIrType().isInt8Type()) {
             // zext i8 to i32: andi rd, rs, 0xFF
             new MipsAlu(MipsAlu.AluType.ANDI, rd, rs, 0xFF);
         } else {

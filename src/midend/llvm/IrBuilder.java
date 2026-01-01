@@ -44,7 +44,7 @@ public class IrBuilder {
 
     // 函数管理
     public static IrFunction getNewFunctionIr(String name, IrType returnType) {
-        String funcIrName = name.equals("main")?"@main":FUNC_PREFIX+name;
+        String funcIrName = name.equals("main") ? "@main" : FUNC_PREFIX + name;
         IrFunction newFunction = new IrFunction(funcIrName, returnType);
         currentModule.addIrFunction(newFunction);
         currentFunction = newFunction;
@@ -63,8 +63,8 @@ public class IrBuilder {
 
     // 基本块管理
     public static IrBasicBlock getNewBasicBlockIr() {
-        String blockIrName = BLOCK_PREFIX+basicBlockCount++;
-        return new IrBasicBlock(blockIrName,currentFunction);
+        String blockIrName = BLOCK_PREFIX + basicBlockCount++;
+        return new IrBasicBlock(blockIrName, currentFunction);
     }
 
     public static IrBasicBlock getCurrentBasicBlock() {
@@ -82,9 +82,9 @@ public class IrBuilder {
     }
 
     // 全局变量管理
-    public static IrGlobalValue getNewGlobalValueIr(IrType irType, IrConstant initValue){
-        String globalIrName = GLOBAL_VAR_PREFIX+globalVarCount++;
-        IrGlobalValue newGlobalValue = new IrGlobalValue(globalIrName,irType,initValue);
+    public static IrGlobalValue getNewGlobalValueIr(IrType irType, IrConstant initValue) {
+        String globalIrName = GLOBAL_VAR_PREFIX + globalVarCount++;
+        IrGlobalValue newGlobalValue = new IrGlobalValue(globalIrName, irType, initValue);
         currentModule.addIrGlobalValue(newGlobalValue);
         return newGlobalValue;
     }
@@ -112,14 +112,32 @@ public class IrBuilder {
     }
 
     // 局部变量命名管理
-    public static String getLocalVarNameIr(){
+    public static String getLocalVarNameIr() {
         int count = localVarCountMap.get(currentFunction);
-        localVarCountMap.put(currentFunction, count+1);
-        return LOCAL_VAR_PREFIX+count;
+        localVarCountMap.put(currentFunction, count + 1);
+        return LOCAL_VAR_PREFIX + count;
+    }
+
+    /**
+     * 为指定函数生成局部变量名（用于优化阶段）
+     */
+    public static String getLocalVarNameIr(IrFunction irFunction) {
+        int count = localVarCountMap.getOrDefault(irFunction, 0);
+        localVarCountMap.put(irFunction, count + 1);
+        return LOCAL_VAR_PREFIX + count;
     }
 
     // 字符串命名管理
-    public static String getStringNameIr(){
+    public static String getStringNameIr() {
         return STRING_PREFIX + stringCount++;
+    }
+
+    /**
+     * 为 RemovePhi 优化创建新的基本块
+     * 该基本块不会被自动添加到函数中，需要手动处理
+     */
+    public static IrBasicBlock getNewBasicBlockForRemovePhi(IrFunction function) {
+        String blockIrName = BLOCK_PREFIX + basicBlockCount++;
+        return new IrBasicBlock(blockIrName, function);
     }
 }

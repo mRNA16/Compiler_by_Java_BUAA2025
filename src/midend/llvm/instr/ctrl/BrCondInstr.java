@@ -16,8 +16,8 @@ import backend.mips.assembly.MipsAlu;
 
 public class BrCondInstr extends Instr {
     private final IrValue cond;
-    private final IrBasicBlock sucBlock;
-    private final IrBasicBlock failBlock;
+    private IrBasicBlock sucBlock;
+    private IrBasicBlock failBlock;
 
     public BrCondInstr(IrValue cond, IrBasicBlock sucBlock, IrBasicBlock failBlock) {
         super(IrBaseType.VOID, InstrType.BRANCH, "branch");
@@ -30,7 +30,7 @@ public class BrCondInstr extends Instr {
     }
 
     public IrValue getCond() {
-        return cond;
+        return this.getUseValueList().get(0);
     }
 
     public IrBasicBlock getSucBlock() {
@@ -41,6 +41,14 @@ public class BrCondInstr extends Instr {
         return failBlock;
     }
 
+    public void setSucBlock(IrBasicBlock sucBlock) {
+        this.sucBlock = sucBlock;
+    }
+
+    public void setFailBlock(IrBasicBlock failBlock) {
+        this.failBlock = failBlock;
+    }
+
     @Override
     public String toString() {
         return "br i1 " + cond.getIrName() + ", label %" + sucBlock.getIrName() + ", label %" + failBlock.getIrName();
@@ -49,13 +57,16 @@ public class BrCondInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
-        Register condReg = MipsBuilder.getValueToRegister(cond);
+        // 从 useValueList 获取真正的条件值，以支持 MemToReg 优化后的值替换
+        IrValue actualCond = this.getUseValueList().get(0);
+
+        Register condReg = MipsBuilder.getValueToRegister(actualCond);
         if (condReg == null) {
             condReg = Register.K0;
-            if (cond instanceof IrConstInt constInt) {
+            if (actualCond instanceof IrConstInt constInt) {
                 new MipsAlu(MipsAlu.AluType.ADDIU, condReg, Register.ZERO, constInt.getValue());
             } else {
-                Integer offset = MipsBuilder.getStackValueOffset(cond);
+                Integer offset = MipsBuilder.getStackValueOffset(actualCond);
                 if (offset != null) {
                     new MipsLsu(MipsLsu.LsuType.LW, condReg, Register.SP, offset);
                 }
