@@ -10,7 +10,10 @@ import backend.mips.MipsBuilder;
 import backend.mips.Register;
 import backend.mips.assembly.MipsAlu;
 import backend.mips.assembly.MipsMdu;
+import backend.mips.assembly.MipsCompare;
 import backend.mips.assembly.MipsLsu;
+import backend.mips.assembly.fake.MarsLi;
+import java.math.BigInteger;
 
 public class CalculateInstr extends Instr {
     public enum CalculateType {
@@ -88,24 +91,24 @@ public class CalculateInstr extends Instr {
             switch (calculateType) {
                 case ADD -> new MipsAlu(MipsAlu.AluType.ADDIU, rd, leftReg, imm);
                 case SUB -> new MipsAlu(MipsAlu.AluType.ADDIU, rd, leftReg, -imm);
-                case MUL -> { // MUL不支持立即数，需要加载
-                    Register rightReg = Register.K1;
-                    new MipsAlu(MipsAlu.AluType.ADDIU, rightReg, Register.ZERO, imm);
-                    new MipsMdu(MipsMdu.MduType.MULT, leftReg, rightReg);
-                    new MipsMdu(MipsMdu.MduType.MFLO, rd);
+                case MUL -> {
+                    if (isPowerOfTwo(Math.abs(imm))) {
+                        int n = log2(Math.abs(imm));
+                        new MipsAlu(MipsAlu.AluType.SLL, rd, leftReg, n);
+                        if (imm < 0) {
+                            new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, rd);
+                        }
+                    } else if (imm == 0) {
+                        new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.ZERO, Register.ZERO);
+                    } else {
+                        Register rightReg = Register.K1;
+                        new MipsAlu(MipsAlu.AluType.ADDIU, rightReg, Register.ZERO, imm);
+                        new MipsMdu(MipsMdu.MduType.MULT, leftReg, rightReg);
+                        new MipsMdu(MipsMdu.MduType.MFLO, rd);
+                    }
                 }
-                case SDIV -> {
-                    Register rightReg = Register.K1;
-                    new MipsAlu(MipsAlu.AluType.ADDIU, rightReg, Register.ZERO, imm);
-                    new MipsMdu(MipsMdu.MduType.DIV, leftReg, rightReg);
-                    new MipsMdu(MipsMdu.MduType.MFLO, rd);
-                }
-                case SREM -> {
-                    Register rightReg = Register.K1;
-                    new MipsAlu(MipsAlu.AluType.ADDIU, rightReg, Register.ZERO, imm);
-                    new MipsMdu(MipsMdu.MduType.DIV, leftReg, rightReg);
-                    new MipsMdu(MipsMdu.MduType.MFHI, rd);
-                }
+                case SDIV -> divOptimize(leftReg, imm, rd);
+                case SREM -> remOptimize(leftReg, imm, rd);
                 case AND -> new MipsAlu(MipsAlu.AluType.ANDI, rd, leftReg, imm);
                 case OR -> new MipsAlu(MipsAlu.AluType.ORI, rd, leftReg, imm);
             }
@@ -140,6 +143,95 @@ public class CalculateInstr extends Instr {
         }
     }
 
+    private void divOptimize(Register dividend, int imm, Register rd) {
+        if (imm == 1) {
+            if (rd != dividend)
+                new MipsAlu(MipsAlu.AluType.ADDU, rd, dividend, Register.ZERO);
+        } else if (imm == -1) {
+            new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, dividend);
+        } else if (isPowerOfTwo(Math.abs(imm))) {
+            int n = log2(Math.abs(imm));
+            // 使用 K0 作为中间计算，避免覆盖 dividend
+            new MipsAlu(MipsAlu.AluType.SRA, Register.K0, dividend, 31);
+            new MipsAlu(MipsAlu.AluType.SRL, Register.K0, Register.K0, 32 - n);
+            new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, dividend, Register.K0);
+            new MipsAlu(MipsAlu.AluType.SRA, Register.K0, Register.K0, n);
+            if (imm < 0) {
+                new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, Register.K0);
+            } else {
+                if (rd != Register.K0)
+                    new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.K0, Register.ZERO);
+            }
+        } else {
+            // Magic Number Division
+            long d = Math.abs(imm);
+            Multiplier multiplier = getMultiplier(d, 31);
+            BigInteger m = multiplier.m;
+            int post = multiplier.post;
+
+            // 1. 将被除数加载到 K1，魔法数加载到 K0
+            new MipsAlu(MipsAlu.AluType.ADDU, Register.K1, dividend, Register.ZERO);
+            new MarsLi(Register.K0, m.intValue());
+
+            // 2. 执行乘法 (signed mult)
+            new MipsMdu(MipsMdu.MduType.MULT, Register.K0, Register.K1);
+
+            // 3. 取高位结果并进行修正
+            if (m.compareTo(BigInteger.ONE.shiftLeft(31)) < 0) {
+                new MipsMdu(MipsMdu.MduType.MFHI, Register.K0);
+            } else {
+                new MipsMdu(MipsMdu.MduType.MFHI, Register.K0);
+                new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, Register.K0, Register.K1);
+            }
+
+            // 4. 右移 post 位
+            if (post > 0) {
+                new MipsAlu(MipsAlu.AluType.SRA, Register.K0, Register.K0, post);
+            }
+
+            // 5. 修正负数情况: q = q + (n < 0 ? 1 : 0)
+            new MipsCompare(MipsCompare.CompareType.SLT, Register.K1, Register.K1, Register.ZERO);
+            new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, Register.K0, Register.K1);
+
+            // 6. 处理除数正负并写入结果
+            if (imm < 0) {
+                new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, Register.K0);
+            } else {
+                if (rd != Register.K0)
+                    new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.K0, Register.ZERO);
+            }
+        }
+    }
+
+    private void remOptimize(Register dividend, int imm, Register rd) {
+        if (Math.abs(imm) == 1) {
+            new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.ZERO, Register.ZERO);
+        } else {
+            // m % n = m - (m / n * n)
+            // 1. 保护被除数到 FP，因为 divOptimize 会修改 K0/K1
+            new MipsAlu(MipsAlu.AluType.ADDU, Register.FP, dividend, Register.ZERO);
+
+            // 2. 计算 q = m / n，结果存入 GP
+            divOptimize(Register.FP, imm, Register.GP);
+
+            // 3. 计算 p = q * n，结果存入 GP
+            if (isPowerOfTwo(Math.abs(imm))) {
+                int n = log2(Math.abs(imm));
+                new MipsAlu(MipsAlu.AluType.SLL, Register.GP, Register.GP, n);
+                if (imm < 0) {
+                    new MipsAlu(MipsAlu.AluType.SUBU, Register.GP, Register.ZERO, Register.GP);
+                }
+            } else {
+                new MarsLi(Register.K0, imm);
+                new MipsMdu(MipsMdu.MduType.MULT, Register.GP, Register.K0);
+                new MipsMdu(MipsMdu.MduType.MFLO, Register.GP);
+            }
+
+            // 4. 计算 m - p，结果存入 rd
+            new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.FP, Register.GP);
+        }
+    }
+
     private Register getOperandReg(IrValue value, Register tempReg) {
         Register reg = MipsBuilder.getValueToRegister(value);
         if (reg != null) {
@@ -162,5 +254,47 @@ public class CalculateInstr extends Instr {
 
     private boolean isAluImm(int val) {
         return val >= -32768 && val <= 32767;
+    }
+
+    private boolean isPowerOfTwo(int n) {
+        return n > 0 && (n & (n - 1)) == 0;
+    }
+
+    private int log2(int n) {
+        return (int) (Math.log(n) / Math.log(2));
+    }
+
+    private static class Multiplier {
+        private final BigInteger m;
+        private final int post;
+
+        public Multiplier(BigInteger m, int post) {
+            this.m = m;
+            this.post = post;
+        }
+    }
+
+    private Multiplier getMultiplier(long d, int prec) {
+        int l = 32 - countLeadingZeros(d - 1);
+        int post = l;
+        BigInteger low = BigInteger.ONE.shiftLeft(32 + l).divide(BigInteger.valueOf(d));
+        BigInteger high = BigInteger.ONE.shiftLeft(32 + l).add(BigInteger.ONE.shiftLeft(32 + l - prec))
+                .divide(BigInteger.valueOf(d));
+        while (low.shiftRight(1).compareTo(high.shiftRight(1)) < 0 && post > 0) {
+            low = low.shiftRight(1);
+            high = high.shiftRight(1);
+            post--;
+        }
+        return new Multiplier(high, post);
+    }
+
+    private int countLeadingZeros(long x) {
+        int count = 0;
+        for (int i = 31; i >= 0; i--) {
+            if ((x & (1L << i)) != 0)
+                break;
+            count++;
+        }
+        return count;
     }
 }
