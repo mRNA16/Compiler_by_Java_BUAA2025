@@ -104,7 +104,7 @@ public class IrDeclVisitor {
                         StoreInstr storeInstr = new StoreInstr(irValue,allocateInstr);
                     }
                 } else {
-                    if(varDef.hasInitVal()){
+                    if(varDef.hasInitVal()&&exps!=null){
                         for(int i = 0; i < exps.size(); i++){
                             Exp exp = exps.get(i);
                             IrValue irValue = IrExpVisitor.visitExp(exp);
