@@ -22,6 +22,8 @@ public class OptimizeManager {
         this.optimizers.add(new ConstantPropagation());
         // 常量传播后可能产生新的不可达代码
         this.optimizers.add(new RemoveUnReachCode());
+        // 死代码删除
+        this.optimizers.add(new DeadCodeElimination());
         // RemovePhi 需要在 MemToReg 之后执行，将 Phi 指令转换为 Move 指令
         this.optimizers.add(new RemovePhi());
     }
