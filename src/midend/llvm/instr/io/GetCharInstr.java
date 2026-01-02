@@ -26,6 +26,9 @@ public class GetCharInstr extends IOInstr {
     @Override
     public void toMips() {
         super.toMips();
+        java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
+        MipsBuilder.saveCurrent(allocatedRegisterList);
+
         new MipsAlu(MipsAlu.AluType.ADDI, Register.V0, Register.ZERO, 12);
         new MipsSyscall();
 
@@ -42,5 +45,7 @@ public class GetCharInstr extends IOInstr {
                 new MipsLsu(MipsLsu.LsuType.SW, Register.K0, Register.SP, offset);
             }
         }
+
+        MipsBuilder.recoverCurrent(allocatedRegisterList);
     }
 }

@@ -9,6 +9,7 @@ import midend.llvm.value.IrValue;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 
 public class MipsBuilder {
     private static MipsModule currentModule = null;
@@ -90,7 +91,7 @@ public class MipsBuilder {
         // 3. 为进入参数分配空间 (Incoming parameters)
         // 注意：只有前 3 个参数（A1-A3）可能需要溢出到当前栈帧
         // 第 4 个及以后的参数已经在调用者的栈帧中了
-        for (int i = 0; i < Math.min(3, irFunction.getParameters().size()); i++) {
+        for (int i = 0; i < Math.min(4, irFunction.getParameters().size()); i++) {
             allocateStackForValue(irFunction.getParameters().get(i));
         }
 
@@ -156,10 +157,10 @@ public class MipsBuilder {
     public static Integer getStackValueOffset(IrValue irValue) {
         if (irValue instanceof IrParameter param) {
             int index = currentFunction.getParameters().indexOf(param);
-            if (index >= 3) {
+            if (index >= 4) {
                 // 传入参数 4+ 在调用者的栈帧中
-                // 调用者将第 i 个参数存放在 i*4($sp_caller)
-                return frameSize + index * 4;
+                // 调用者将第 i 个参数存放在 (i-4)*4($sp_caller)
+                return frameSize + (index - 4) * 4;
             }
         }
         Integer offset = stackOffsetValueMap.get(irValue);
@@ -177,6 +178,45 @@ public class MipsBuilder {
         }
 
         return address;
+    }
+
+    public static void loadValueToReg(IrValue value, Register reg) {
+        Register srcReg = getValueToRegister(value);
+        if (srcReg != null) {
+            if (srcReg != reg) {
+                new backend.mips.assembly.fake.MarsMove(reg, srcReg);
+            }
+            return;
+        }
+        if (value instanceof midend.llvm.constant.IrConstInt constInt) {
+            new backend.mips.assembly.fake.MarsLi(reg, constInt.getValue());
+            return;
+        }
+        if (value instanceof midend.llvm.value.IrGlobalValue globalValue) {
+            new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW, reg,
+                    globalValue.getMipsLabel());
+            return;
+        }
+        Integer offset = getStackValueOffset(value);
+        if (offset != null) {
+            new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW, reg, Register.SP, offset);
+        }
+    }
+
+    public static void saveCurrent(List<Register> allocatedRegisterList) {
+        int baseOffset = getRegSaveOffset();
+        for (int i = 0; i < allocatedRegisterList.size(); i++) {
+            new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.SW,
+                    allocatedRegisterList.get(i), Register.SP, baseOffset - (i + 1) * 4);
+        }
+    }
+
+    public static void recoverCurrent(List<Register> allocatedRegisterList) {
+        int baseOffset = getRegSaveOffset();
+        for (int i = 0; i < allocatedRegisterList.size(); i++) {
+            new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW,
+                    allocatedRegisterList.get(i), Register.SP, baseOffset - (i + 1) * 4);
+        }
     }
 
     public static void allocateStackSpace(int offset) {

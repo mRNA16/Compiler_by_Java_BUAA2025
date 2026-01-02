@@ -3,10 +3,8 @@ package midend.llvm.instr.ctrl;
 import midend.llvm.IrBuilder;
 import midend.llvm.instr.Instr;
 import midend.llvm.instr.InstrType;
-import midend.llvm.type.IrBaseType;
 import midend.llvm.value.IrFunction;
 import midend.llvm.value.IrValue;
-import midend.llvm.value.IrParameter;
 import midend.llvm.constant.IrConstInt;
 
 import backend.mips.MipsBuilder;
@@ -20,15 +18,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CallInstr extends Instr {
-    private IrFunction function;
-    private List<IrValue> args;
 
     public CallInstr(IrFunction function, List<IrValue> args) {
         super(function.getReturnType(), InstrType.CALL,
                 (function.getReturnType().isVoidType() ? "call" : IrBuilder.getLocalVarNameIr()));
-        this.function = function;
         this.addUseValue(function);
-        this.args = new ArrayList<>(args);
         args.forEach(this::addUseValue);
     }
 
@@ -79,7 +73,7 @@ public class CallInstr extends Instr {
         List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
         // 保护现场
-        saveCurrent(allocatedRegisterList);
+        MipsBuilder.saveCurrent(allocatedRegisterList);
 
         // 从 useValueList 获取实际参数
         List<IrValue> actualArgs = getArgs();
@@ -91,7 +85,7 @@ public class CallInstr extends Instr {
         new MipsJump(MipsJump.JumpType.JAL, getFunction().getMipsLabel());
 
         // 恢复现场
-        recoverCurrent(allocatedRegisterList);
+        MipsBuilder.recoverCurrent(allocatedRegisterList);
 
         // 处理返回值
         IrFunction func = getFunction();
@@ -112,35 +106,19 @@ public class CallInstr extends Instr {
         }
     }
 
-    private void saveCurrent(List<Register> allocatedRegisterList) {
-        int baseOffset = MipsBuilder.getRegSaveOffset();
-        for (int i = 0; i < allocatedRegisterList.size(); i++) {
-            new MipsLsu(MipsLsu.LsuType.SW, allocatedRegisterList.get(i), Register.SP,
-                    baseOffset - (i + 1) * 4);
-        }
-    }
-
     private void fillParams(List<IrValue> paramList, List<Register> allocatedRegisterList) {
         int regSaveBase = MipsBuilder.getRegSaveOffset();
         for (int i = 0; i < paramList.size(); i++) {
             IrValue param = paramList.get(i);
-            if (i < 3) {
-                Register paramRegister = Register.get(Register.A0.ordinal() + i + 1);
+            if (i < 4) {
+                Register paramRegister = Register.get(Register.A0.ordinal() + i);
                 loadValueToRegister(param, paramRegister, regSaveBase, allocatedRegisterList);
             } else {
                 Register tempRegister = Register.K0;
                 loadValueToRegister(param, tempRegister, regSaveBase, allocatedRegisterList);
                 // 参数 4+ 存放在栈顶起始位置 (0, 4, 8, 12, 16...)
-                new MipsLsu(MipsLsu.LsuType.SW, tempRegister, Register.SP, i * 4);
+                new MipsLsu(MipsLsu.LsuType.SW, tempRegister, Register.SP, (i - 4) * 4);
             }
-        }
-    }
-
-    private void recoverCurrent(List<Register> allocatedRegisterList) {
-        int baseOffset = MipsBuilder.getRegSaveOffset();
-        for (int i = 0; i < allocatedRegisterList.size(); i++) {
-            new MipsLsu(MipsLsu.LsuType.LW, allocatedRegisterList.get(i), Register.SP,
-                    baseOffset - (i + 1) * 4);
         }
     }
 
@@ -157,6 +135,10 @@ public class CallInstr extends Instr {
             }
         } else if (value instanceof IrConstInt constInt) {
             new MipsAlu(MipsAlu.AluType.ADDIU, reg, Register.ZERO, constInt.getValue());
+        } else if (value instanceof midend.llvm.value.IrGlobalValue globalValue) {
+            new MipsLsu(MipsLsu.LsuType.LA, reg, globalValue.getMipsLabel());
+        } else if (value instanceof midend.llvm.constant.IrConstString constString) {
+            new MipsLsu(MipsLsu.LsuType.LA, reg, constString.getMipsLabel());
         } else {
             Integer offset = MipsBuilder.getStackValueOffset(value);
             if (offset != null) {

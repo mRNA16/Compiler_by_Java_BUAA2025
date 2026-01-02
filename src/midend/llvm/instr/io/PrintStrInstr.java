@@ -31,8 +31,13 @@ public class PrintStrInstr extends IOInstr {
     @Override
     public void toMips() {
         super.toMips();
+        java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
+        MipsBuilder.saveCurrent(allocatedRegisterList);
+
         new MipsLsu(MipsLsu.LsuType.LA, Register.A0, irConstString.getMipsLabel());
         new MipsAlu(MipsAlu.AluType.ADDI, Register.V0, Register.ZERO, 4);
         new MipsSyscall();
+
+        MipsBuilder.recoverCurrent(allocatedRegisterList);
     }
 }

@@ -23,13 +23,9 @@ public class ICompInstr extends Instr {
     }
 
     private final ICompType compType;
-    private final IrValue L;
-    private final IrValue R;
 
     public ICompInstr(String op, IrValue L, IrValue R) {
         super(IrBaseType.INT1, InstrType.CMP);
-        this.L = L;
-        this.R = R;
         this.addUseValue(L);
         this.addUseValue(R);
         this.compType = string2ICompType(op);
@@ -113,20 +109,9 @@ public class ICompInstr extends Instr {
     }
 
     private Register getOperandReg(IrValue value, Register tempReg) {
+        MipsBuilder.loadValueToReg(value, tempReg);
         Register reg = MipsBuilder.getValueToRegister(value);
-        if (reg != null) {
-            return reg;
-        }
-        if (value instanceof IrConstInt constInt) {
-            new MipsAlu(MipsAlu.AluType.ADDIU, tempReg, Register.ZERO, constInt.getValue());
-            return tempReg;
-        }
-        Integer offset = MipsBuilder.getStackValueOffset(value);
-        if (offset != null) {
-            new MipsLsu(MipsLsu.LsuType.LW, tempReg, Register.SP, offset);
-            return tempReg;
-        }
-        return tempReg;
+        return reg != null ? reg : tempReg;
     }
 
     private boolean isAluImm(int val) {

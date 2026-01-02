@@ -15,13 +15,11 @@ import backend.mips.assembly.MipsLsu;
 import backend.mips.assembly.MipsAlu;
 
 public class BrCondInstr extends Instr {
-    private final IrValue cond;
     private IrBasicBlock sucBlock;
     private IrBasicBlock failBlock;
 
     public BrCondInstr(IrValue cond, IrBasicBlock sucBlock, IrBasicBlock failBlock) {
         super(IrBaseType.VOID, InstrType.BRANCH, "branch");
-        this.cond = cond;
         this.sucBlock = sucBlock;
         this.failBlock = failBlock;
         this.addUseValue(cond);

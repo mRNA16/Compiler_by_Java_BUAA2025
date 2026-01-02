@@ -103,6 +103,16 @@ public class IrFunction extends IrValue {
     @Override
     public void toMips() {
         new MipsLabel(this.getMipsLabel());
+
+        // 必须在 setCurrentFunction 之前分配参数寄存器，
+        // 这样 preAllocateFrame 才能正确计算寄存器保存空间
+        for (int i = 0; i < this.parameters.size(); i++) {
+            if (i < 4) {
+                this.valueRegisterMap.put(this.parameters.get(i),
+                        Register.get(Register.A0.ordinal() + i));
+            }
+        }
+
         MipsBuilder.setCurrentFunction(this);
 
         int frameSize = MipsBuilder.getFrameSize();
@@ -113,10 +123,13 @@ public class IrFunction extends IrValue {
         }
 
         for (int i = 0; i < this.parameters.size(); i++) {
-            // 为前三个参数分配寄存器
-            if (i < 3) {
-                MipsBuilder.allocateRegForParam(this.parameters.get(i),
-                        Register.get(Register.A0.ordinal() + i + 1));
+            IrParameter param = this.parameters.get(i);
+            if (i < 4) {
+                Register reg = Register.get(Register.A0.ordinal() + i);
+                Integer offset = MipsBuilder.getStackValueOffset(param);
+                if (offset != null) {
+                    new MipsLsu(MipsLsu.LsuType.SW, reg, Register.SP, offset);
+                }
             }
         }
 

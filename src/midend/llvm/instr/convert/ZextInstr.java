@@ -12,12 +12,10 @@ import backend.mips.assembly.MipsLsu;
 
 public class ZextInstr extends Instr {
     private final IrType targetType;
-    private final IrValue originValue;
 
     public ZextInstr(IrType targetType, IrValue originValue) {
         super(targetType, InstrType.EXTEND);
         this.targetType = targetType;
-        this.originValue = originValue;
         this.addUseValue(originValue);
     }
 
@@ -44,13 +42,11 @@ public class ZextInstr extends Instr {
         Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
                 : Register.K0;
 
-        Register rs = MipsBuilder.getValueToRegister(actualOriginValue);
-        if (rs == null) {
-            rs = Register.K0;
-            Integer offset = MipsBuilder.getStackValueOffset(actualOriginValue);
-            if (offset != null) {
-                new MipsLsu(MipsLsu.LsuType.LW, rs, Register.SP, offset);
-            }
+        Register rs = Register.K0;
+        MipsBuilder.loadValueToReg(actualOriginValue, rs);
+        Register allocatedRs = MipsBuilder.getValueToRegister(actualOriginValue);
+        if (allocatedRs != null) {
+            rs = allocatedRs;
         }
 
         if (actualOriginValue.getIrType().isInt8Type()) {

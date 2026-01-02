@@ -4,7 +4,6 @@ import backend.mips.MipsBuilder;
 import backend.mips.Register;
 import backend.mips.assembly.MipsLsu;
 import backend.mips.assembly.MipsAlu;
-import midend.llvm.constant.IrConstInt;
 import midend.llvm.type.IrBaseType;
 import midend.llvm.value.IrBasicBlock;
 import midend.llvm.value.IrValue;
@@ -68,38 +67,7 @@ public class MoveInstr extends Instr {
      * 将值加载到指定寄存器
      */
     private void loadValueToRegister(IrValue irValue, Register targetRegister) {
-        if (irValue instanceof IrConstInt constInt) {
-            new MipsAlu(MipsAlu.AluType.ADDIU, targetRegister, Register.ZERO, constInt.getValue());
-            return;
-        }
-
-        // 处理函数参数 - 前3个参数在 A1, A2, A3 寄存器中
-        if (irValue instanceof midend.llvm.value.IrParameter param) {
-            midend.llvm.value.IrFunction currentFunc = MipsBuilder.getCurrentFunction();
-            if (currentFunc != null) {
-                int index = currentFunc.getParameters().indexOf(param);
-                if (index >= 0 && index < 3) {
-                    Register paramReg = Register.get(Register.A0.ordinal() + index + 1);
-                    if (!paramReg.equals(targetRegister)) {
-                        new MipsAlu(MipsAlu.AluType.ADDU, targetRegister, paramReg, Register.ZERO);
-                    }
-                    return;
-                }
-            }
-        }
-
-        Register valueRegister = MipsBuilder.getValueToRegister(irValue);
-        if (valueRegister != null) {
-            if (!valueRegister.equals(targetRegister)) {
-                new MipsAlu(MipsAlu.AluType.ADDU, targetRegister, valueRegister, Register.ZERO);
-            }
-            return;
-        }
-
-        Integer offset = MipsBuilder.getStackValueOffset(irValue);
-        if (offset != null) {
-            new MipsLsu(MipsLsu.LsuType.LW, targetRegister, Register.SP, offset);
-        }
+        MipsBuilder.loadValueToReg(irValue, targetRegister);
     }
 
     /**

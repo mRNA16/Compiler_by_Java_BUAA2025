@@ -5,22 +5,15 @@ import midend.llvm.instr.InstrType;
 import midend.llvm.type.IrBaseType;
 import midend.llvm.value.IrValue;
 import midend.llvm.value.IrGlobalValue;
-import midend.llvm.constant.IrConstInt;
-import midend.llvm.instr.memory.AllocateInstr;
 
 import backend.mips.MipsBuilder;
 import backend.mips.Register;
 import backend.mips.assembly.MipsLsu;
-import backend.mips.assembly.MipsAlu;
 
 public class StoreInstr extends Instr {
-    private final IrValue bury;
-    private final IrValue address;
 
     public StoreInstr(IrValue bury, IrValue address) {
         super(IrBaseType.VOID, InstrType.STORE, "store");
-        this.bury = bury;
-        this.address = address;
         this.addUseValue(bury);
         this.addUseValue(address);
     }
@@ -48,17 +41,11 @@ public class StoreInstr extends Instr {
         IrValue actualBury = this.getUseValueList().get(0);
         IrValue actualAddress = this.getUseValueList().get(1);
 
-        Register rs = MipsBuilder.getValueToRegister(actualBury);
-        if (rs == null) {
-            rs = Register.K0;
-            if (actualBury instanceof IrConstInt constInt) {
-                new MipsAlu(MipsAlu.AluType.ADDIU, rs, Register.ZERO, constInt.getValue());
-            } else {
-                Integer offset = MipsBuilder.getStackValueOffset(actualBury);
-                if (offset != null) {
-                    new MipsLsu(MipsLsu.LsuType.LW, rs, Register.SP, offset);
-                }
-            }
+        Register rs = Register.K0;
+        MipsBuilder.loadValueToReg(actualBury, rs);
+        Register allocatedRs = MipsBuilder.getValueToRegister(actualBury);
+        if (allocatedRs != null) {
+            rs = allocatedRs;
         }
 
         if (actualAddress instanceof IrGlobalValue) {

@@ -27,13 +27,9 @@ public class CalculateInstr extends Instr {
     }
 
     private CalculateType calculateType;
-    private IrValue L;
-    private IrValue R;
 
     public CalculateInstr(String op, IrValue L, IrValue R) {
         super(IrBaseType.INT32, InstrType.ALU);
-        this.L = L;
-        this.R = R;
         this.addUseValue(L);
         this.addUseValue(R);
         this.calculateType = string2CalculateType(op);
@@ -93,23 +89,28 @@ public class CalculateInstr extends Instr {
                 case ADD -> new MipsAlu(MipsAlu.AluType.ADDIU, rd, leftReg, imm);
                 case SUB -> new MipsAlu(MipsAlu.AluType.ADDIU, rd, leftReg, -imm);
                 case MUL -> {
-                    if (isPowerOfTwo(Math.abs(imm))) {
+                    if (imm == 0) {
+                        new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.ZERO, Register.ZERO);
+                    } else if (imm == 1) {
+                        if (rd != leftReg)
+                            new MipsAlu(MipsAlu.AluType.ADDU, rd, leftReg, Register.ZERO);
+                    } else if (imm == -1) {
+                        new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, leftReg);
+                    } else if (isPowerOfTwo(Math.abs(imm))) {
                         int n = log2(Math.abs(imm));
                         new MipsAlu(MipsAlu.AluType.SLL, rd, leftReg, n);
                         if (imm < 0) {
                             new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, rd);
                         }
-                    } else if (imm == 0) {
-                        new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.ZERO, Register.ZERO);
                     } else {
                         Register rightReg = Register.K1;
-                        new MipsAlu(MipsAlu.AluType.ADDIU, rightReg, Register.ZERO, imm);
+                        new MarsLi(rightReg, imm);
                         new MipsMdu(MipsMdu.MduType.MULT, leftReg, rightReg);
                         new MipsMdu(MipsMdu.MduType.MFLO, rd);
                     }
                 }
-                case SDIV -> divOptimize(leftReg, imm, rd);
-                case SREM -> remOptimize(leftReg, imm, rd);
+                case SDIV -> divOptimize(actualL, imm, rd);
+                case SREM -> remOptimize(actualL, imm, rd);
                 case AND -> new MipsAlu(MipsAlu.AluType.ANDI, rd, leftReg, imm);
                 case OR -> new MipsAlu(MipsAlu.AluType.ORI, rd, leftReg, imm);
             }
@@ -144,24 +145,21 @@ public class CalculateInstr extends Instr {
         }
     }
 
-    private void divOptimize(Register dividend, int imm, Register rd) {
+    private void divOptimize(IrValue dividendValue, int imm, Register rd) {
         if (imm == 1) {
-            if (rd != dividend)
-                new MipsAlu(MipsAlu.AluType.ADDU, rd, dividend, Register.ZERO);
+            MipsBuilder.loadValueToReg(dividendValue, rd);
         } else if (imm == -1) {
-            new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, dividend);
+            MipsBuilder.loadValueToReg(dividendValue, rd);
+            new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, rd);
         } else if (isPowerOfTwo(Math.abs(imm))) {
             int n = log2(Math.abs(imm));
-            // 使用 K0 作为中间计算，避免覆盖 dividend
-            new MipsAlu(MipsAlu.AluType.SRA, Register.K0, dividend, 31);
+            MipsBuilder.loadValueToReg(dividendValue, Register.K1);
+            new MipsAlu(MipsAlu.AluType.SRA, Register.K0, Register.K1, 31);
             new MipsAlu(MipsAlu.AluType.SRL, Register.K0, Register.K0, 32 - n);
-            new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, dividend, Register.K0);
-            new MipsAlu(MipsAlu.AluType.SRA, Register.K0, Register.K0, n);
+            new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, Register.K1, Register.K0);
+            new MipsAlu(MipsAlu.AluType.SRA, rd, Register.K0, n);
             if (imm < 0) {
-                new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, Register.K0);
-            } else {
-                if (rd != Register.K0)
-                    new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.K0, Register.ZERO);
+                new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, rd);
             }
         } else {
             // Magic Number Division
@@ -170,87 +168,57 @@ public class CalculateInstr extends Instr {
             BigInteger m = multiplier.m;
             int post = multiplier.post;
 
-            // 1. 将被除数加载到 K1，魔法数加载到 K0
-            new MipsAlu(MipsAlu.AluType.ADDU, Register.K1, dividend, Register.ZERO);
-            new MarsLi(Register.K0, m.intValue());
-
-            // 2. 执行乘法 (signed mult)
-            new MipsMdu(MipsMdu.MduType.MULT, Register.K0, Register.K1);
-
-            // 3. 取高位结果并进行修正
+            MipsBuilder.loadValueToReg(dividendValue, Register.K1);
             if (m.compareTo(BigInteger.ONE.shiftLeft(31)) < 0) {
-                new MipsMdu(MipsMdu.MduType.MFHI, Register.K0);
+                new MarsLi(rd, m.intValue());
+                new MipsMdu(MipsMdu.MduType.MULT, rd, Register.K1);
+                new MipsMdu(MipsMdu.MduType.MFHI, rd);
             } else {
-                new MipsMdu(MipsMdu.MduType.MFHI, Register.K0);
-                new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, Register.K0, Register.K1);
+                new MarsLi(rd, m.intValue());
+                new MipsMdu(MipsMdu.MduType.MULT, rd, Register.K1);
+                new MipsMdu(MipsMdu.MduType.MFHI, rd);
+                new MipsAlu(MipsAlu.AluType.ADDU, rd, rd, Register.K1);
             }
 
-            // 4. 右移 post 位
             if (post > 0) {
-                new MipsAlu(MipsAlu.AluType.SRA, Register.K0, Register.K0, post);
+                new MipsAlu(MipsAlu.AluType.SRA, rd, rd, post);
             }
 
-            // 5. 修正负数情况: q = q + (n < 0 ? 1 : 0)
             new MipsCompare(MipsCompare.CompareType.SLT, Register.K1, Register.K1, Register.ZERO);
-            new MipsAlu(MipsAlu.AluType.ADDU, Register.K0, Register.K0, Register.K1);
+            new MipsAlu(MipsAlu.AluType.ADDU, rd, rd, Register.K1);
 
-            // 6. 处理除数正负并写入结果
             if (imm < 0) {
-                new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, Register.K0);
-            } else {
-                if (rd != Register.K0)
-                    new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.K0, Register.ZERO);
+                new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.ZERO, rd);
             }
         }
     }
 
-    private void remOptimize(Register dividend, int imm, Register rd) {
+    private void remOptimize(IrValue dividendValue, int imm, Register rd) {
         if (Math.abs(imm) == 1) {
             new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.ZERO, Register.ZERO);
         } else {
             // m % n = m - (m / n * n)
-            // 1. 保护被除数到 FP，因为 divOptimize 会修改 K0/K1
-            new MipsAlu(MipsAlu.AluType.ADDU, Register.FP, dividend, Register.ZERO);
+            // 使用 FP 和 GP 寄存器，避免与 K0/K1 冲突
+            MipsBuilder.loadValueToReg(dividendValue, Register.FP);
+            divOptimize(dividendValue, imm, Register.GP);
 
-            // 2. 计算 q = m / n，结果存入 GP
-            divOptimize(Register.FP, imm, Register.GP);
-
-            // 3. 计算 p = q * n，结果存入 GP
             if (isPowerOfTwo(Math.abs(imm))) {
                 int n = log2(Math.abs(imm));
                 new MipsAlu(MipsAlu.AluType.SLL, Register.GP, Register.GP, n);
-                if (imm < 0) {
-                    new MipsAlu(MipsAlu.AluType.SUBU, Register.GP, Register.ZERO, Register.GP);
-                }
             } else {
                 new MarsLi(Register.K0, imm);
                 new MipsMdu(MipsMdu.MduType.MULT, Register.GP, Register.K0);
                 new MipsMdu(MipsMdu.MduType.MFLO, Register.GP);
             }
 
-            // 4. 计算 m - p，结果存入 rd
             new MipsAlu(MipsAlu.AluType.SUBU, rd, Register.FP, Register.GP);
         }
     }
 
     private Register getOperandReg(IrValue value, Register tempReg) {
+        MipsBuilder.loadValueToReg(value, tempReg);
         Register reg = MipsBuilder.getValueToRegister(value);
-        if (reg != null) {
-            return reg;
-        }
-        if (value instanceof IrConstInt constInt) {
-            new MipsAlu(MipsAlu.AluType.ADDIU, tempReg, Register.ZERO, constInt.getValue());
-            return tempReg;
-        }
-        // 从栈中加载
-        Integer offset = MipsBuilder.getStackValueOffset(value);
-        if (offset != null) {
-            new MipsLsu(MipsLsu.LsuType.LW, tempReg, Register.SP, offset);
-            return tempReg;
-        }
-        // 应该是全局变量或其他
-        // TODO: handle global variables
-        return tempReg;
+        return reg != null ? reg : tempReg;
     }
 
     private boolean isAluImm(int val) {

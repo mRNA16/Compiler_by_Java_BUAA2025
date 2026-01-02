@@ -12,11 +12,8 @@ import backend.mips.Register;
 import backend.mips.assembly.MipsLsu;
 
 public class LoadInstr extends Instr {
-    private final IrValue pointer;
-
     public LoadInstr(IrValue pointer) {
         super(((IrPointerType) pointer.getIrType()).getTargetType(), InstrType.LOAD);
-        this.pointer = pointer;
         this.addUseValue(pointer);
     }
 
