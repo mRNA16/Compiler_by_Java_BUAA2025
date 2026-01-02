@@ -28,7 +28,8 @@ public class ReturnInstr extends Instr {
 
     @Override
     public String toString() {
-        return "ret " + ((returnValue != null) ? (returnValue.getIrType().toString() + " " + returnValue.getIrName())
+        IrValue val = (this.getUseValueList().isEmpty()) ? null : this.getUseValueList().get(0);
+        return "ret " + ((val != null) ? (val.getIrType().toString() + " " + val.getIrName())
                 : "void");
     }
 

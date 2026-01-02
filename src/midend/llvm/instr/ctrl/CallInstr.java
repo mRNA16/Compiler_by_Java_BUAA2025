@@ -33,7 +33,7 @@ public class CallInstr extends Instr {
     }
 
     public IrFunction getFunction() {
-        return function;
+        return (IrFunction) this.getUseValueList().get(0);
     }
 
     public List<IrValue> getArgs() {
@@ -47,18 +47,21 @@ public class CallInstr extends Instr {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        if (!function.getReturnType().isVoidType()) {
+        IrFunction func = getFunction();
+        List<IrValue> actualArgs = getArgs();
+
+        if (!func.getReturnType().isVoidType()) {
             sb.append(irName);
             sb.append(" = ");
         }
         sb.append("call ")
-                .append((function.getReturnType().isVoidType()) ? "void" : function.getReturnType())
+                .append((func.getReturnType().isVoidType()) ? "void" : func.getReturnType())
                 .append(" ")
-                .append(function.getIrName())
+                .append(func.getIrName())
                 .append("(");
 
         boolean haveArgs = false;
-        for (IrValue arg : args) {
+        for (IrValue arg : actualArgs) {
             sb.append(arg.getIrType().toString())
                     .append(" ");
             sb.append(arg.getIrName()).append(", ");
@@ -78,23 +81,21 @@ public class CallInstr extends Instr {
         // 保护现场
         saveCurrent(allocatedRegisterList);
 
-        // 从 useValueList 获取实际参数（第一个元素是函数，参数从索引1开始）
-        List<IrValue> actualArgs = new ArrayList<>();
-        for (int i = 1; i < this.getUseValueList().size(); i++) {
-            actualArgs.add(this.getUseValueList().get(i));
-        }
+        // 从 useValueList 获取实际参数
+        List<IrValue> actualArgs = getArgs();
 
         // 将参数填入对应位置
         fillParams(actualArgs, allocatedRegisterList);
 
         // 跳转到函数
-        new MipsJump(MipsJump.JumpType.JAL, function.getMipsLabel());
+        new MipsJump(MipsJump.JumpType.JAL, getFunction().getMipsLabel());
 
         // 恢复现场
         recoverCurrent(allocatedRegisterList);
 
         // 处理返回值
-        if (!function.getReturnType().isVoidType()) {
+        IrFunction func = getFunction();
+        if (!func.getReturnType().isVoidType()) {
             Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
                     : Register.K0;
 
@@ -147,9 +148,11 @@ public class CallInstr extends Instr {
             List<Register> allocatedRegisterList) {
         Register srcReg = MipsBuilder.getValueToRegister(value);
         if (srcReg != null) {
-            // 如果该值当前在寄存器中，且该寄存器被保护了，需要从保护区加载？
-            // 不，在 saveCurrent 之后，寄存器的值还在寄存器里，可以直接 move
-            if (srcReg != reg) {
+            int index = allocatedRegisterList.indexOf(srcReg);
+            if (index != -1) {
+                // 如果该值在寄存器中，从保护区加载，避免被之前的参数覆盖
+                new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, regSaveBase - (index + 1) * 4);
+            } else if (srcReg != reg) {
                 new MarsMove(reg, srcReg);
             }
         } else if (value instanceof IrConstInt constInt) {

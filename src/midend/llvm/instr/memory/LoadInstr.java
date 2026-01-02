@@ -26,7 +26,8 @@ public class LoadInstr extends Instr {
 
     @Override
     public String toString() {
-        return irName + " = load " + irType + ", " + pointer.getIrType() + " " + pointer.getIrName();
+        IrValue actualPointer = getPointer();
+        return irName + " = load " + irType + ", " + actualPointer.getIrType() + " " + actualPointer.getIrName();
     }
 
     @Override

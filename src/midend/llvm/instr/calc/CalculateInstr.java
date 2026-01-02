@@ -53,9 +53,10 @@ public class CalculateInstr extends Instr {
 
     @Override
     public String toString() {
+        IrValue actualL = getL();
+        IrValue actualR = getR();
         return irName + " = " + calculateType.toString().toLowerCase() + " i32 " +
-                L.getIrName() + ", " + R.getIrName();
-
+                actualL.getIrName() + ", " + actualR.getIrName();
     }
 
     private CalculateType string2CalculateType(String s) {

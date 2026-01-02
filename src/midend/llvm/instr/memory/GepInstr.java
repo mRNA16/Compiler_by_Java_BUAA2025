@@ -57,12 +57,15 @@ public class GepInstr extends Instr {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(irName).append(" =  getelementptr inbounds ");
-        IrType pTargetType = ((IrPointerType) pointer.getIrType()).getTargetType();
-        sb.append(pTargetType).append(", ").append(pointer.getIrType()).append(" ").append(pointer.getIrName())
+        IrValue actualPointer = getPointer();
+        IrValue actualOffset = getOffset();
+        IrType pTargetType = ((IrPointerType) actualPointer.getIrType()).getTargetType();
+        sb.append(pTargetType).append(", ").append(actualPointer.getIrType()).append(" ")
+                .append(actualPointer.getIrName())
                 .append(", ");
         if (pTargetType.isArrayType())
             sb.append("i32 0, ");
-        sb.append(offset.getIrType()).append(" ").append(offset.getIrName());
+        sb.append(actualOffset.getIrType()).append(" ").append(actualOffset.getIrName());
         return sb.toString();
     }
 

@@ -35,8 +35,10 @@ public class StoreInstr extends Instr {
 
     @Override
     public String toString() {
-        return "store " + bury.getIrType() + " " + bury.getIrName()
-                + ", " + address.getIrType() + " " + address.getIrName();
+        IrValue actualBury = getBury();
+        IrValue actualAddress = getAddress();
+        return "store " + actualBury.getIrType() + " " + actualBury.getIrName()
+                + ", " + actualAddress.getIrType() + " " + actualAddress.getIrName();
     }
 
     @Override

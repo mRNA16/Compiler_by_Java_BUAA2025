@@ -26,7 +26,8 @@ public class PrintIntInstr extends IOInstr {
 
     @Override
     public String toString() {
-        return "call void @putint(i32 " + printValue.getIrName() + ")";
+        IrValue val = getPrintValue();
+        return "call void @putint(i32 " + val.getIrName() + ")";
     }
 
     @Override

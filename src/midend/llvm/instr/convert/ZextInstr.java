@@ -31,7 +31,8 @@ public class ZextInstr extends Instr {
 
     @Override
     public String toString() {
-        return irName + " = zext " + originValue.getIrType() + " " + originValue.getIrName() + " to " + targetType;
+        IrValue val = getOriginValue();
+        return irName + " = zext " + val.getIrType() + " " + val.getIrName() + " to " + targetType;
     }
 
     @Override

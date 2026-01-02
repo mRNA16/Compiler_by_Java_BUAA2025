@@ -49,7 +49,10 @@ public class ICompInstr extends Instr {
 
     @Override
     public String toString() {
-        return irName + " = icmp " + compType.toString().toLowerCase() + " i32 " + L.getIrName() + ", " + R.getIrName();
+        IrValue actualL = getL();
+        IrValue actualR = getR();
+        return irName + " = icmp " + compType.toString().toLowerCase() + " i32 " + actualL.getIrName() + ", "
+                + actualR.getIrName();
     }
 
     private ICompType string2ICompType(String s) {

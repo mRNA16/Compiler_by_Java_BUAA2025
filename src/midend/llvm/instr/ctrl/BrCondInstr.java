@@ -51,7 +51,9 @@ public class BrCondInstr extends Instr {
 
     @Override
     public String toString() {
-        return "br i1 " + cond.getIrName() + ", label %" + sucBlock.getIrName() + ", label %" + failBlock.getIrName();
+        IrValue actualCond = getCond();
+        return "br i1 " + actualCond.getIrName() + ", label %" + sucBlock.getIrName() + ", label %"
+                + failBlock.getIrName();
     }
 
     @Override
