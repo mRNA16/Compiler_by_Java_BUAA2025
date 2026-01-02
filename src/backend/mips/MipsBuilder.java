@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MipsBuilder {
     private static MipsModule currentModule = null;
@@ -205,22 +206,22 @@ public class MipsBuilder {
         }
     }
 
-    public static void saveCurrent(List<Register> allocatedRegisterList) {
+    public static void saveCurrent(List<Register> allocatedRegisterList, Set<Register> registersToSave) {
         int baseOffset = getRegSaveOffset();
         for (int i = 0; i < allocatedRegisterList.size(); i++) {
             Register reg = allocatedRegisterList.get(i);
-            if (isCallerSaved(reg)) {
+            if (isCallerSaved(reg) && registersToSave.contains(reg)) {
                 new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.SW,
                         reg, Register.SP, baseOffset - (i + 1) * 4);
             }
         }
     }
 
-    public static void recoverCurrent(List<Register> allocatedRegisterList) {
+    public static void recoverCurrent(List<Register> allocatedRegisterList, Set<Register> registersToRestore) {
         int baseOffset = getRegSaveOffset();
         for (int i = 0; i < allocatedRegisterList.size(); i++) {
             Register reg = allocatedRegisterList.get(i);
-            if (isCallerSaved(reg)) {
+            if (isCallerSaved(reg) && registersToRestore.contains(reg)) {
                 new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW,
                         reg, Register.SP, baseOffset - (i + 1) * 4);
             }

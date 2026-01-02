@@ -205,6 +205,38 @@ public class IrBasicBlock extends IrValue {
         return this.irName;
     }
 
+    /**
+     * 获取在指定指令处活跃的变量集合
+     */
+    public HashSet<IrValue> getLiveValuesAt(Instr targetInstr) {
+        HashSet<IrValue> live = new HashSet<>(this.liveOut);
+        for (int i = instructions.size() - 1; i >= 0; i--) {
+            Instr current = instructions.get(i);
+            if (current == targetInstr) {
+                return live;
+            }
+            // 逆向更新活跃变量
+            // 1. 移除被定义的变量 (Def)
+            live.remove(current);
+            // 2. 添加被使用的变量 (Use)
+            for (IrValue use : current.getUseValueList()) {
+                if (isAllocatable(use)) {
+                    live.add(use);
+                }
+            }
+        }
+        return live;
+    }
+
+    private boolean isAllocatable(IrValue value) {
+        if (value == null || value instanceof midend.llvm.constant.IrConstant ||
+                value instanceof IrGlobalValue || value instanceof IrBasicBlock ||
+                value instanceof IrFunction) {
+            return false;
+        }
+        return !value.getIrType().isVoidType();
+    }
+
     @Override
     public void toMips() {
         new MipsLabel(this.getMipsLabel());

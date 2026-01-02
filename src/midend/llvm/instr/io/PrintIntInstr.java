@@ -32,15 +32,31 @@ public class PrintIntInstr extends IOInstr {
     public void toMips() {
         super.toMips();
         java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
-        MipsBuilder.saveCurrent(allocatedRegisterList);
 
-        // 使用 getUseValueList() 获取真正的打印值，以支持 MemToReg 优化后的值替换
+        // 1. 计算需要保护的寄存器
+        java.util.HashSet<Register> registersToSave = new java.util.HashSet<>();
+        java.util.HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
+        for (midend.llvm.value.IrValue val : liveValues) {
+            Register reg = MipsBuilder.getValueToRegister(val);
+            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+                registersToSave.add(reg);
+            }
+        }
+        // 打印值本身也需要保护 (如果它在 Caller-Saved 寄存器中)
         IrValue actualPrintValue = this.getUseValueList().get(0);
         Register rs = MipsBuilder.getValueToRegister(actualPrintValue);
+        if (rs != null && MipsBuilder.isCallerSaved(rs)) {
+            registersToSave.add(rs);
+        }
+
+        // 2. 保护现场
+        MipsBuilder.saveCurrent(allocatedRegisterList, registersToSave);
+
+        // 3. 加载打印值到 A0
         if (rs != null) {
             int index = allocatedRegisterList.indexOf(rs);
-            if (index != -1) {
-                // 如果该值在寄存器中，从保护区加载，避免被之前的参数覆盖
+            if (index != -1 && registersToSave.contains(rs)) {
+                // 如果该值在寄存器中且被保护了，从保护区加载
                 new MipsLsu(MipsLsu.LsuType.LW, Register.A0, Register.SP,
                         MipsBuilder.getRegSaveOffset() - (index + 1) * 4);
             } else {
@@ -60,6 +76,7 @@ public class PrintIntInstr extends IOInstr {
         new MipsAlu(MipsAlu.AluType.ADDI, Register.V0, Register.ZERO, 1);
         new MipsSyscall();
 
-        MipsBuilder.recoverCurrent(allocatedRegisterList);
+        // 4. 恢复现场
+        MipsBuilder.recoverCurrent(allocatedRegisterList, registersToSave);
     }
 }

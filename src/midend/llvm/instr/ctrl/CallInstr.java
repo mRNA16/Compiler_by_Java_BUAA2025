@@ -15,6 +15,7 @@ import backend.mips.assembly.MipsLsu;
 import backend.mips.assembly.fake.MarsMove;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 public class CallInstr extends Instr {
@@ -72,22 +73,38 @@ public class CallInstr extends Instr {
         super.toMips();
         List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
-        // 保护现场
-        MipsBuilder.saveCurrent(allocatedRegisterList);
-
-        // 从 useValueList 获取实际参数
+        // 1. 计算需要保护的寄存器：在当前指令处活跃的 Caller-Saved 寄存器，以及作为参数使用的寄存器
+        HashSet<Register> registersToSave = new HashSet<>();
+        // 活跃变量
+        HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
+        for (midend.llvm.value.IrValue val : liveValues) {
+            Register reg = MipsBuilder.getValueToRegister(val);
+            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+                registersToSave.add(reg);
+            }
+        }
+        // 参数变量 (为了处理参数覆盖问题，也需要保护)
         List<IrValue> actualArgs = getArgs();
+        for (IrValue arg : actualArgs) {
+            Register reg = MipsBuilder.getValueToRegister(arg);
+            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+                registersToSave.add(reg);
+            }
+        }
 
-        // 将参数填入对应位置
-        fillParams(actualArgs, allocatedRegisterList);
+        // 2. 保护现场
+        MipsBuilder.saveCurrent(allocatedRegisterList, registersToSave);
 
-        // 跳转到函数
+        // 3. 将参数填入对应位置
+        fillParams(actualArgs, allocatedRegisterList, registersToSave);
+
+        // 4. 跳转到函数
         new MipsJump(MipsJump.JumpType.JAL, getFunction().getMipsLabel());
 
-        // 恢复现场
-        MipsBuilder.recoverCurrent(allocatedRegisterList);
+        // 5. 恢复现场
+        MipsBuilder.recoverCurrent(allocatedRegisterList, registersToSave);
 
-        // 处理返回值
+        // 6. 处理返回值
         IrFunction func = getFunction();
         if (!func.getReturnType().isVoidType()) {
             Register rd = MipsBuilder.getValueToRegister(this);
@@ -108,16 +125,17 @@ public class CallInstr extends Instr {
         }
     }
 
-    private void fillParams(List<IrValue> paramList, List<Register> allocatedRegisterList) {
+    private void fillParams(List<IrValue> paramList, List<Register> allocatedRegisterList,
+            HashSet<Register> savedRegisters) {
         int regSaveBase = MipsBuilder.getRegSaveOffset();
         for (int i = 0; i < paramList.size(); i++) {
             IrValue param = paramList.get(i);
             if (i < 4) {
                 Register paramRegister = Register.get(Register.A0.ordinal() + i);
-                loadValueToRegister(param, paramRegister, regSaveBase, allocatedRegisterList);
+                loadValueToRegister(param, paramRegister, regSaveBase, allocatedRegisterList, savedRegisters);
             } else {
                 Register tempRegister = Register.K0;
-                loadValueToRegister(param, tempRegister, regSaveBase, allocatedRegisterList);
+                loadValueToRegister(param, tempRegister, regSaveBase, allocatedRegisterList, savedRegisters);
                 // 参数 4+ 存放在栈顶起始位置 (0, 4, 8, 12, 16...)
                 new MipsLsu(MipsLsu.LsuType.SW, tempRegister, Register.SP, (i - 4) * 4);
             }
@@ -125,12 +143,12 @@ public class CallInstr extends Instr {
     }
 
     private void loadValueToRegister(IrValue value, Register reg, int regSaveBase,
-                                     List<Register> allocatedRegisterList) {
+            List<Register> allocatedRegisterList, HashSet<Register> savedRegisters) {
         Register srcReg = MipsBuilder.getValueToRegister(value);
         if (srcReg != null) {
             int index = allocatedRegisterList.indexOf(srcReg);
-            if (index != -1 && MipsBuilder.isCallerSaved(srcReg)) {
-                // 如果该值在寄存器中且是 Caller-Saved，从保护区加载
+            if (index != -1 && MipsBuilder.isCallerSaved(srcReg) && savedRegisters.contains(srcReg)) {
+                // 如果该值在寄存器中且被保护了，从保护区加载
                 new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, regSaveBase - (index + 1) * 4);
             } else if (srcReg != reg) {
                 new MarsMove(reg, srcReg);

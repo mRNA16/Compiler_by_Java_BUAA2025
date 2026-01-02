@@ -32,12 +32,25 @@ public class PrintStrInstr extends IOInstr {
     public void toMips() {
         super.toMips();
         java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
-        MipsBuilder.saveCurrent(allocatedRegisterList);
+
+        // 1. 计算需要保护的寄存器
+        java.util.HashSet<Register> registersToSave = new java.util.HashSet<>();
+        java.util.HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
+        for (midend.llvm.value.IrValue val : liveValues) {
+            Register reg = MipsBuilder.getValueToRegister(val);
+            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+                registersToSave.add(reg);
+            }
+        }
+
+        // 2. 保护现场
+        MipsBuilder.saveCurrent(allocatedRegisterList, registersToSave);
 
         new MipsLsu(MipsLsu.LsuType.LA, Register.A0, irConstString.getMipsLabel());
         new MipsAlu(MipsAlu.AluType.ADDI, Register.V0, Register.ZERO, 4);
         new MipsSyscall();
 
-        MipsBuilder.recoverCurrent(allocatedRegisterList);
+        // 3. 恢复现场
+        MipsBuilder.recoverCurrent(allocatedRegisterList, registersToSave);
     }
 }
