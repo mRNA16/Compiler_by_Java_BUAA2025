@@ -24,6 +24,7 @@ public class OptimizeManager {
             this.optimizers.add(new Lvn());
             this.optimizers.add(new ConstantPropagation());
             this.optimizers.add(new StrengthReduction());
+            this.optimizers.add(new Licm());
             this.optimizers.add(new DeadCodeElimination());
             this.optimizers.add(new RemoveUnReachCode());
             this.optimizers.add(new CfgBuilder()); // 维护最新的 CFG 和支配信息

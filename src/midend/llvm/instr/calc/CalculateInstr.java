@@ -76,7 +76,6 @@ public class CalculateInstr extends Instr {
         IrValue actualR = this.getUseValueList().get(1);
 
         // 目的寄存器
-        // 目的寄存器
         Register rd = MipsBuilder.getValueToRegister(this);
         if (rd == null) {
             rd = Register.K0;
