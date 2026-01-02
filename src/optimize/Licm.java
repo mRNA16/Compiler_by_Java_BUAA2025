@@ -176,7 +176,7 @@ public class Licm extends Optimizer {
                 for (Instr instr : block.getInstructions()) {
                     if (invariants.contains(instr))
                         continue;
-                    if (!isMovable(instr))
+                    if (!isMovable(instr, loop))
                         continue;
 
                     boolean isInvariant = true;
@@ -200,17 +200,79 @@ public class Licm extends Optimizer {
         return invariants;
     }
 
-    private boolean isMovable(Instr instr) {
+    private boolean isMovable(Instr instr, NaturalLoop loop) {
         // 只有无副作用的计算指令可以移动
         // 排除：Store, Call (可能有副作用), IO, Return, Br, Phi
         if (instr instanceof StoreInstr || instr instanceof CallInstr ||
                 instr instanceof IOInstr || instr instanceof BrInstr ||
-                instr instanceof BrCondInstr || instr instanceof midend.llvm.instr.phi.PhiInstr ||
-                instr instanceof LoadInstr) { // Load 暂时不移，除非能证明内存没变
+                instr instanceof BrCondInstr || instr instanceof midend.llvm.instr.phi.PhiInstr) {
             return false;
         }
+
+        if (instr instanceof LoadInstr load) {
+            return isMemoryInvariant(load, loop);
+        }
+
         // CalculateInstr, GepInstr, ZextInstr, TruncInstr, ICompInstr 都是可以移动的
         return !instr.getIrType().isVoidType();
+    }
+
+    private boolean isMemoryInvariant(LoadInstr load, NaturalLoop loop) {
+        IrValue ptr = load.getPointer();
+
+        // 检查循环内是否有冲突的写操作
+        for (IrBasicBlock block : loop.blocks) {
+            for (Instr instr : block.getInstructions()) {
+                if (instr instanceof StoreInstr store) {
+                    if (mayAlias(ptr, store.getAddress())) {
+                        return false; // 可能被修改，不能外提
+                    }
+                } else if (instr instanceof CallInstr call) {
+                    // 假设外部函数调用会修改所有可能的内存
+                    // 除非确定该函数是无副作用的
+                    if (!isSideEffectFree(call)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean mayAlias(IrValue p1, IrValue p2) {
+        if (p1.equals(p2))
+            return true;
+
+        // 获取指针的根源（哪个 alloca 或 global）
+        IrValue root1 = getRootPointer(p1);
+        IrValue root2 = getRootPointer(p2);
+
+        // 如果根源不同，在 SysY 中一定不别名
+        if (root1 != null && root2 != null && !root1.equals(root2)) {
+            return false;
+        }
+
+        // 根源相同或未知，保守认为可能别名
+        return true;
+    }
+
+    private IrValue getRootPointer(IrValue ptr) {
+        if (ptr instanceof midend.llvm.instr.memory.AllocateInstr ||
+                ptr instanceof midend.llvm.value.IrGlobalValue) {
+            return ptr;
+        }
+        if (ptr instanceof midend.llvm.instr.memory.GepInstr gep) {
+            return getRootPointer(gep.getPointer());
+        }
+        return null;
+    }
+
+    private boolean isSideEffectFree(CallInstr call) {
+        String name = call.getFunction().getIrName();
+        // 常见的 IO 函数不会修改用户定义的内存变量
+        return name.equals("@putint") || name.equals("@putch") || name.equals("@putstr") ||
+                name.equals("@putarray") || name.equals("@getint") || name.equals("@getch") ||
+                name.equals("@getarray");
     }
 
     private void moveInstrToPreHeader(Instr instr, IrBasicBlock preHeader) {
