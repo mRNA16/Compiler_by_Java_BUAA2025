@@ -40,52 +40,8 @@ public class IrConstArray extends IrConstant {
                 flattened.addAll(irConstArray.getFlattenedValues());
             }
         }
-        // Padding with zeros if necessary
         int currentSize = flattened.size();
-        int totalSize = arraySize; // Assuming arraySize is total elements for 1D, but for multi-D it might be
-                                   // different.
-        // However, IrConstArray usually represents one dimension.
-        // If it's a multi-dimensional array, values contains sub-arrays.
-        // If it's a 1D array, values contains integers.
-        // The issue is calculating total elements recursively.
-        // But for now, let's assume simple flattening.
-        // Actually, IrConstArray structure in this compiler seems to handle 1D at a
-        // time.
-        // Let's check how IrArrayType works.
-        // If it is [2 x [3 x i32]], arraySize is 2. values has 2 IrConstArrays.
-        // Each IrConstArray has arraySize 3.
-        // So recursive flattening is correct.
-
-        // We need to pad based on the TOTAL size of THIS array level?
-        // No, getFlattenedValues should return ALL integers in this array
-        // (recursively).
-        // The padding logic in toString uses `elementType` and `arraySize`.
-        // If elementType is i32, we pad with 0.
-        // If elementType is array, we pad with zeroinitializer array?
-        // MipsSpaceOptimize expects a list of Integers.
-        // So we should flatten everything to Integers.
-
-        // Calculate expected total integers?
-        // It's hard without type info fully available/parsed here easily.
-        // But we can just flatten what we have.
-        // The caller (IrGlobalValue) uses getSize() * 4.
-        // If getSize() returns the number of elements in THIS dimension (e.g. 2 for [2
-        // x [3 x i32]]),
-        // then getSize() * 4 is WRONG for total size in bytes if elements are arrays.
-        // IrGlobalValue should use getIrType().getSize() or similar.
-        // But IrType.getSize() might not be implemented for MIPS yet.
-
-        // Let's look at IrGlobalValue usage: `constArray.getSize() * 4`.
-        // This implies IrGlobalValue thinks it's a 1D array of i32.
-        // If it's multi-dimensional, this is buggy in IrGlobalValue too.
-        // But let's implement getFlattenedValues first.
-
-        // For padding:
-        // We need to know how many integers are missing.
-        // This requires knowing the total capacity in integers.
-        // Let's assume the user's compiler handles initialization correctly and we just
-        // dump what's there.
-        // Or we can try to pad.
+        int totalSize = arraySize;
 
         return flattened;
     }
