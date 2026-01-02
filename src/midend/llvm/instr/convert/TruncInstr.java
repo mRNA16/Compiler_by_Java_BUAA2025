@@ -37,8 +37,10 @@ public class TruncInstr extends Instr {
     @Override
     public void toMips() {
         super.toMips();
-        Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
-                : Register.K0;
+        Register rd = MipsBuilder.getValueToRegister(this);
+        if (rd == null) {
+            rd = Register.K0;
+        }
 
         Register rs = MipsBuilder.getValueToRegister(originValue);
         if (rs == null) {

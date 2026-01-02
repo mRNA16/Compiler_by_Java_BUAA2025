@@ -63,6 +63,28 @@ public class IrBasicBlock extends IrValue {
     private final HashSet<IrBasicBlock> directDominateBlocks = new HashSet<>();
     private IrBasicBlock directDominator = null;
 
+    // 活跃变量分析相关的集合
+    private final HashSet<IrValue> useSet = new HashSet<>();
+    private final HashSet<IrValue> defSet = new HashSet<>();
+    private final HashSet<IrValue> liveIn = new HashSet<>();
+    private final HashSet<IrValue> liveOut = new HashSet<>();
+
+    public HashSet<IrValue> getUseSet() {
+        return useSet;
+    }
+
+    public HashSet<IrValue> getDefSet() {
+        return defSet;
+    }
+
+    public HashSet<IrValue> getLiveIn() {
+        return liveIn;
+    }
+
+    public HashSet<IrValue> getLiveOut() {
+        return liveOut;
+    }
+
     public void addNextBlock(IrBasicBlock block) {
         this.nextBlocks.add(block);
     }

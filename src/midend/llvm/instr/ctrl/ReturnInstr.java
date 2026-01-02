@@ -54,6 +54,15 @@ public class ReturnInstr extends Instr {
 
         int frameSize = MipsBuilder.getFrameSize();
         if (frameSize > 0) {
+            // 恢复 Callee-Saved 寄存器 (S0-S7)
+            for (Register reg : MipsBuilder.getAllocatedRegList()) {
+                if (MipsBuilder.isCalleeSaved(reg)) {
+                    Integer offset = MipsBuilder.getRegisterOffset(reg);
+                    if (offset != null) {
+                        new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, offset);
+                    }
+                }
+            }
             // 恢复 RA 寄存器
             new MipsLsu(MipsLsu.LsuType.LW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
             // 恢复 SP 寄存器

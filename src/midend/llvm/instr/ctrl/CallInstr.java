@@ -90,8 +90,10 @@ public class CallInstr extends Instr {
         // 处理返回值
         IrFunction func = getFunction();
         if (!func.getReturnType().isVoidType()) {
-            Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
-                    : Register.K0;
+            Register rd = MipsBuilder.getValueToRegister(this);
+            if (rd == null) {
+                rd = Register.K0;
+            }
 
             if (rd != Register.V0) {
                 new MarsMove(rd, Register.V0);
@@ -123,12 +125,12 @@ public class CallInstr extends Instr {
     }
 
     private void loadValueToRegister(IrValue value, Register reg, int regSaveBase,
-            List<Register> allocatedRegisterList) {
+                                     List<Register> allocatedRegisterList) {
         Register srcReg = MipsBuilder.getValueToRegister(value);
         if (srcReg != null) {
             int index = allocatedRegisterList.indexOf(srcReg);
-            if (index != -1) {
-                // 如果该值在寄存器中，从保护区加载，避免被之前的参数覆盖
+            if (index != -1 && MipsBuilder.isCallerSaved(srcReg)) {
+                // 如果该值在寄存器中且是 Caller-Saved，从保护区加载
                 new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, regSaveBase - (index + 1) * 4);
             } else if (srcReg != reg) {
                 new MarsMove(reg, srcReg);

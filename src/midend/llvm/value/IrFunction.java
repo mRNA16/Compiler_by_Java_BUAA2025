@@ -120,6 +120,16 @@ public class IrFunction extends IrValue {
             new MipsAlu(MipsAlu.AluType.ADDIU, Register.SP, Register.SP, -frameSize);
             // 保存 RA 寄存器
             new MipsLsu(MipsLsu.LsuType.SW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+
+            // 保存 Callee-Saved 寄存器 (S0-S7)
+            for (Register reg : MipsBuilder.getAllocatedRegList()) {
+                if (MipsBuilder.isCalleeSaved(reg)) {
+                    Integer offset = MipsBuilder.getRegisterOffset(reg);
+                    if (offset != null) {
+                        new MipsLsu(MipsLsu.LsuType.SW, reg, Register.SP, offset);
+                    }
+                }
+            }
         }
 
         for (int i = 0; i < this.parameters.size(); i++) {
@@ -129,6 +139,15 @@ public class IrFunction extends IrValue {
                 Integer offset = MipsBuilder.getStackValueOffset(param);
                 if (offset != null) {
                     new MipsLsu(MipsLsu.LsuType.SW, reg, Register.SP, offset);
+                }
+            } else {
+                // 对于超过 4 个的参数，如果被分配了寄存器，需要从调用者的栈帧中加载
+                Register reg = MipsBuilder.getValueToRegister(param);
+                if (reg != null) {
+                    Integer offset = MipsBuilder.getStackValueOffset(param);
+                    if (offset != null) {
+                        new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, offset);
+                    }
                 }
             }
         }

@@ -70,8 +70,10 @@ public class ICompInstr extends Instr {
         IrValue actualL = this.getUseValueList().get(0);
         IrValue actualR = this.getUseValueList().get(1);
 
-        Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
-                : Register.K0;
+        Register rd = MipsBuilder.getValueToRegister(this);
+        if (rd == null) {
+            rd = Register.K0;
+        }
 
         Register leftReg = getOperandReg(actualL, Register.K0);
 

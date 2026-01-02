@@ -32,8 +32,12 @@ public class GetIntInstr extends IOInstr {
         new MipsAlu(MipsAlu.AluType.ADDI, Register.V0, Register.ZERO, 5);
         new MipsSyscall();
 
-        Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
-                : Register.K0;
+        MipsBuilder.recoverCurrent(allocatedRegisterList);
+
+        Register rd = MipsBuilder.getValueToRegister(this);
+        if (rd == null) {
+            rd = Register.K0;
+        }
 
         if (rd != Register.V0) {
             new MarsMove(rd, Register.V0);
@@ -45,7 +49,5 @@ public class GetIntInstr extends IOInstr {
                 new MipsLsu(MipsLsu.LsuType.SW, Register.K0, Register.SP, offset);
             }
         }
-
-        MipsBuilder.recoverCurrent(allocatedRegisterList);
     }
 }

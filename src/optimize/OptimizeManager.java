@@ -31,6 +31,8 @@ public class OptimizeManager {
 
         // RemovePhi 需要在所有 SSA 优化完成后执行
         this.optimizers.add(new RemovePhi());
+        // 活跃变量分析，为寄存器分配做准备
+        this.optimizers.add(new GraphColoringRegAlloc());
     }
 
     public void optimize() {

@@ -39,8 +39,10 @@ public class ZextInstr extends Instr {
         // 从 useValueList 获取真正的源值，以支持 MemToReg 优化后的值替换
         IrValue actualOriginValue = this.getUseValueList().get(0);
 
-        Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
-                : Register.K0;
+        Register rd = MipsBuilder.getValueToRegister(this);
+        if (rd == null) {
+            rd = Register.K0;
+        }
 
         Register rs = Register.K0;
         MipsBuilder.loadValueToReg(actualOriginValue, rs);

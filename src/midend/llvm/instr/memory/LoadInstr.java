@@ -33,8 +33,10 @@ public class LoadInstr extends Instr {
         // 从 useValueList 获取真正的指针操作数，以支持 MemToReg 优化后的值替换
         IrValue actualPointer = this.getUseValueList().get(0);
 
-        Register rd = MipsBuilder.allocateStackForValue(this) == null ? MipsBuilder.getValueToRegister(this)
-                : Register.K0;
+        Register rd = MipsBuilder.getValueToRegister(this);
+        if (rd == null) {
+            rd = Register.K0;
+        }
 
         if (actualPointer instanceof IrGlobalValue) {
             new MipsLsu(MipsLsu.LsuType.LW, rd, actualPointer.getMipsLabel());

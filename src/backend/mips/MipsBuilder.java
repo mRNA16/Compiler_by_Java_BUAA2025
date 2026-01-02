@@ -147,7 +147,9 @@ public class MipsBuilder {
     }
 
     public static ArrayList<Register> getAllocatedRegList() {
-        return new ArrayList<>(new HashSet<>(valueRegisterMap.values()));
+        ArrayList<Register> list = new ArrayList<>(new HashSet<>(valueRegisterMap.values()));
+        list.sort((r1, r2) -> r1.ordinal() - r2.ordinal());
+        return list;
     }
 
     public static int getCurrentStackOffset() {
@@ -206,17 +208,42 @@ public class MipsBuilder {
     public static void saveCurrent(List<Register> allocatedRegisterList) {
         int baseOffset = getRegSaveOffset();
         for (int i = 0; i < allocatedRegisterList.size(); i++) {
-            new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.SW,
-                    allocatedRegisterList.get(i), Register.SP, baseOffset - (i + 1) * 4);
+            Register reg = allocatedRegisterList.get(i);
+            if (isCallerSaved(reg)) {
+                new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.SW,
+                        reg, Register.SP, baseOffset - (i + 1) * 4);
+            }
         }
     }
 
     public static void recoverCurrent(List<Register> allocatedRegisterList) {
         int baseOffset = getRegSaveOffset();
         for (int i = 0; i < allocatedRegisterList.size(); i++) {
-            new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW,
-                    allocatedRegisterList.get(i), Register.SP, baseOffset - (i + 1) * 4);
+            Register reg = allocatedRegisterList.get(i);
+            if (isCallerSaved(reg)) {
+                new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW,
+                        reg, Register.SP, baseOffset - (i + 1) * 4);
+            }
         }
+    }
+
+    public static boolean isCalleeSaved(Register register) {
+        return register.ordinal() >= Register.S0.ordinal() && register.ordinal() <= Register.S7.ordinal();
+    }
+
+    public static boolean isCallerSaved(Register register) {
+        return !isCalleeSaved(register) && register != Register.ZERO && register != Register.K0
+                && register != Register.K1
+                && register != Register.GP && register != Register.SP && register != Register.FP
+                && register != Register.RA;
+    }
+
+    public static Integer getRegisterOffset(Register register) {
+        List<Register> allocatedRegs = getAllocatedRegList();
+        int index = allocatedRegs.indexOf(register);
+        if (index == -1)
+            return null;
+        return getRegSaveOffset() - (index + 1) * 4;
     }
 
     public static void allocateStackSpace(int offset) {
