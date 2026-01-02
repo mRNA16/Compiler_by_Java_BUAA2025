@@ -194,19 +194,20 @@ public class CalculateInstr extends Instr {
     }
 
     private void remOptimize(IrValue dividendValue, int imm, Register rd) {
-        if (Math.abs(imm) == 1) {
+        int absImm = Math.abs(imm);
+        if (absImm == 1) {
             new MipsAlu(MipsAlu.AluType.ADDU, rd, Register.ZERO, Register.ZERO);
         } else {
-            // m % n = m - (m / n * n)
+            // m % n = m % |n| = m - (m / |n| * |n|)
             // 使用 FP 和 GP 寄存器，避免与 K0/K1 冲突
             MipsBuilder.loadValueToReg(dividendValue, Register.FP);
-            divOptimize(dividendValue, imm, Register.GP);
+            divOptimize(dividendValue, absImm, Register.GP);
 
-            if (isPowerOfTwo(Math.abs(imm))) {
-                int n = log2(Math.abs(imm));
+            if (isPowerOfTwo(absImm)) {
+                int n = log2(absImm);
                 new MipsAlu(MipsAlu.AluType.SLL, Register.GP, Register.GP, n);
             } else {
-                new MarsLi(Register.K0, imm);
+                new MarsLi(Register.K0, absImm);
                 new MipsMdu(MipsMdu.MduType.MULT, Register.GP, Register.K0);
                 new MipsMdu(MipsMdu.MduType.MFLO, Register.GP);
             }
