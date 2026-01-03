@@ -49,6 +49,14 @@ public class PhiInstr extends Instr {
         return this.beforeBlockList;
     }
 
+    public IrValue getValueFromBlock(IrBasicBlock block) {
+        int index = this.beforeBlockList.indexOf(block);
+        if (index >= 0) {
+            return this.getUseValueList().get(index);
+        }
+        return null;
+    }
+
     /**
      * 将前驱块对应的值转换为实际值
      * 
