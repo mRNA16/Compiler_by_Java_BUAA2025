@@ -19,12 +19,13 @@ public class OptimizeManager {
         // MemToReg 需要在 CfgBuilder 构建完支配信息后执行
         this.optimizers.add(new MemToReg());
 
-        // 迭代优化：LVN, 常量传播, 强度削弱, 复制传播, LICM, 死代码删除, 不可达代码删除
+        // 迭代优化：GVN, 常量传播, 强度削弱, 复制传播, 内存优化, LICM, 死代码删除, 不可达代码删除
         for (int i = 0; i < 5; i++) {
-            this.optimizers.add(new Lvn());
+            this.optimizers.add(new Gvn());
             this.optimizers.add(new ConstantPropagation());
             this.optimizers.add(new StrengthReduction());
             this.optimizers.add(new CopyPropagation());
+            this.optimizers.add(new GlobalMemoryOptimization());
             this.optimizers.add(new Licm());
             this.optimizers.add(new DeadCodeElimination());
             this.optimizers.add(new RemoveUnReachCode());
