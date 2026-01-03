@@ -5,6 +5,7 @@ import midend.llvm.value.IrValue;
 import midend.llvm.value.IrBasicBlock;
 import midend.llvm.instr.Instr;
 import midend.llvm.instr.MoveInstr;
+import midend.llvm.instr.memory.GepInstr;
 import backend.mips.Register;
 
 import java.util.*;
@@ -97,10 +98,7 @@ public class GraphColoringRegAlloc extends Optimizer {
 
                 // 如果是定义点
                 if (nodes.contains(instr)) {
-                    // 对于 Move 指令，如果 live 中包含 src，则不添加冲突边 (Coalescing 预备，虽然这里没做合并)
-                    // 但为了简单和正确性，先按标准处理：
-                    // Move a <- b: a interferes with live \ {b}
-
+                    // 对于 Move 指令，如果 live 中包含 src，则不添加冲突边
                     boolean isMove = instr instanceof MoveInstr;
                     IrValue moveSrc = isMove ? ((MoveInstr) instr).getSrcValue() : null;
 
@@ -116,9 +114,7 @@ public class GraphColoringRegAlloc extends Optimizer {
 
                 // 添加使用点到 live
                 for (IrValue use : instr.getUseValueList()) {
-                    if (nodes.contains(use)) {
-                        live.add(use);
-                    }
+                    addUseToLive(use, live);
                 }
             }
 
@@ -134,16 +130,26 @@ public class GraphColoringRegAlloc extends Optimizer {
         }
     }
 
+    private void addUseToLive(IrValue val, HashSet<IrValue> live) {
+        if (val == null)
+            return;
+        if (val instanceof GepInstr gep && gep.canBeFoldedIntoAllUsers()) {
+            // 如果是折叠的 Gep，则其操作数才是真正的使用点
+            for (IrValue op : gep.getUseValueList()) {
+                addUseToLive(op, live);
+            }
+        } else if (nodes.contains(val)) {
+            live.add(val);
+        }
+    }
+
     private void simplify() {
         int K = Register.getUsableRegisters().size();
-        // 使用临时集合避免修改 nodes
         Set<IrValue> workList = new HashSet<>(nodes);
 
         while (!workList.isEmpty()) {
-            // 寻找度数 < K 的节点
             IrValue nodeToRemove = null;
 
-            // 优先找度数小的
             for (IrValue v : workList) {
                 if (degree.get(v) < K) {
                     nodeToRemove = v;
@@ -151,9 +157,7 @@ public class GraphColoringRegAlloc extends Optimizer {
                 }
             }
 
-            // 如果没有 < K 的节点，则需要溢出 (Optimistic Coloring: 只是推入栈，也许能着色)
             if (nodeToRemove == null) {
-                // 启发式：选择度数最大的节点溢出
                 int maxDegree = -1;
                 for (IrValue v : workList) {
                     if (degree.get(v) > maxDegree) {
@@ -163,17 +167,11 @@ public class GraphColoringRegAlloc extends Optimizer {
                 }
             }
 
-            // 移除节点
             workList.remove(nodeToRemove);
             selectStack.push(nodeToRemove);
 
-            // 更新邻居度数
             for (IrValue neighbor : adjList.get(nodeToRemove)) {
                 if (workList.contains(neighbor)) {
-                    // 注意：这里只是逻辑上移除，实际 degree map 还是保留原值或者需要动态维护
-                    // 为了简单，我们这里不修改 degree map 的值，而是假设移除后不再贡献冲突
-                    // 但标准的 simplify 需要减少邻居的度数
-                    // 让我们用一个动态的 degree map
                     int currentDegree = degree.get(neighbor);
                     if (currentDegree > 0) {
                         degree.put(neighbor, currentDegree - 1);
@@ -186,23 +184,17 @@ public class GraphColoringRegAlloc extends Optimizer {
     private void assignColors(IrFunction function) {
         List<Register> usableRegisters = Register.getUsableRegisters();
         Map<IrValue, Register> colors = function.getValueRegisterMap();
-        // 清除旧的分配 (除了参数 A0-A3，但 IrFunction.toMips 会重置它们，所以这里我们只负责添加新的)
-        // 注意：IrFunction.getValueRegisterMap() 返回的是引用，直接修改它
 
         while (!selectStack.isEmpty()) {
             IrValue node = selectStack.pop();
             Set<Register> usedColors = new HashSet<>();
 
-            // 检查已着色的邻居
             for (IrValue neighbor : adjList.get(node)) {
-                // 邻居可能在栈中（还没着色），或者已经着色
-                // 我们只关心已经着色的
                 if (colors.containsKey(neighbor)) {
                     usedColors.add(colors.get(neighbor));
                 }
             }
 
-            // 选择一个未使用的颜色
             Register assignedReg = null;
             for (Register reg : usableRegisters) {
                 if (!usedColors.contains(reg)) {
@@ -213,9 +205,6 @@ public class GraphColoringRegAlloc extends Optimizer {
 
             if (assignedReg != null) {
                 colors.put(node, assignedReg);
-            } else {
-                // 溢出：不分配寄存器，MipsBuilder 会自动分配栈空间
-                // System.out.println("Spilled: " + node);
             }
         }
     }

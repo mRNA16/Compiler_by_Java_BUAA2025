@@ -111,9 +111,12 @@ public class ICompInstr extends Instr {
     }
 
     private Register getOperandReg(IrValue value, Register tempReg) {
-        MipsBuilder.loadValueToReg(value, tempReg);
         Register reg = MipsBuilder.getValueToRegister(value);
-        return reg != null ? reg : tempReg;
+        if (reg != null) {
+            return reg;
+        }
+        MipsBuilder.loadValueToReg(value, tempReg);
+        return tempReg;
     }
 
     private boolean isAluImm(int val) {

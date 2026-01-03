@@ -46,7 +46,7 @@ public class GepInstr extends Instr {
         return ((IrConstInt) getOffset()).getValue() * 4;
     }
 
-    private boolean canBeFoldedIntoAllUsers() {
+    public boolean canBeFoldedIntoAllUsers() {
         if (!isConstantOffset())
             return false;
         if (getBeUsedList().isEmpty())

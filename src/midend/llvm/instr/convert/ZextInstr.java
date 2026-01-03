@@ -44,11 +44,10 @@ public class ZextInstr extends Instr {
             rd = Register.K0;
         }
 
-        Register rs = Register.K0;
-        MipsBuilder.loadValueToReg(actualOriginValue, rs);
-        Register allocatedRs = MipsBuilder.getValueToRegister(actualOriginValue);
-        if (allocatedRs != null) {
-            rs = allocatedRs;
+        Register rs = MipsBuilder.getValueToRegister(actualOriginValue);
+        if (rs == null) {
+            rs = Register.K0;
+            MipsBuilder.loadValueToReg(actualOriginValue, rs);
         }
 
         if (actualOriginValue.getIrType().isInt8Type()) {

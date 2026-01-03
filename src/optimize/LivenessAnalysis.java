@@ -2,6 +2,7 @@ package optimize;
 
 import midend.llvm.instr.Instr;
 import midend.llvm.instr.MoveInstr;
+import midend.llvm.instr.memory.GepInstr;
 import midend.llvm.value.IrBasicBlock;
 import midend.llvm.value.IrFunction;
 import midend.llvm.value.IrValue;
@@ -69,26 +70,33 @@ public class LivenessAnalysis extends Optimizer {
                 IrValue src = moveInstr.getSrcValue();
                 IrValue dst = moveInstr.getDstValue();
 
-                if (src != null && isAllocatable(src)) {
-                    if (!def.contains(src)) {
-                        use.add(src);
-                    }
-                }
+                addUse(src, use, def);
                 if (dst != null && isAllocatable(dst)) {
                     def.add(dst);
                 }
             } else {
                 // 普通指令：操作数是 use，指令本身是 def
                 for (IrValue operand : instr.getUseValueList()) {
-                    if (operand != null && isAllocatable(operand)) {
-                        if (!def.contains(operand)) {
-                            use.add(operand);
-                        }
-                    }
+                    addUse(operand, use, def);
                 }
                 if (isAllocatable(instr)) {
                     def.add(instr);
                 }
+            }
+        }
+    }
+
+    private void addUse(IrValue val, HashSet<IrValue> use, HashSet<IrValue> def) {
+        if (val == null)
+            return;
+        if (val instanceof GepInstr gep && gep.canBeFoldedIntoAllUsers()) {
+            // 如果是折叠的 Gep，则其操作数才是真正的使用点
+            for (IrValue op : gep.getUseValueList()) {
+                addUse(op, use, def);
+            }
+        } else if (isAllocatable(val)) {
+            if (!def.contains(val)) {
+                use.add(val);
             }
         }
     }
@@ -105,6 +113,10 @@ public class LivenessAnalysis extends Optimizer {
         }
         // Void 类型的指令不需要寄存器
         if (value.getIrType().isVoidType()) {
+            return false;
+        }
+        // 优化：被折叠的 GepInstr 不需要分配寄存器
+        if (value instanceof GepInstr gep && gep.canBeFoldedIntoAllUsers()) {
             return false;
         }
         return true;
