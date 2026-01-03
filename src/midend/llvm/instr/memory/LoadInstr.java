@@ -45,6 +45,26 @@ public class LoadInstr extends Instr {
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.LW, rd, Register.SP, offset);
             }
+        } else if (actualPointer instanceof GepInstr gep && gep.isConstantOffset()) {
+            IrValue baseValue = gep.getPointer();
+            int offset = gep.getConstantOffsetValue();
+            if (baseValue instanceof IrGlobalValue) {
+                new MipsLsu(MipsLsu.LsuType.LW, rd, baseValue.getMipsLabel(), offset);
+            } else if (baseValue instanceof AllocateInstr) {
+                Integer baseOffset = MipsBuilder.getAllocaDataOffset(baseValue);
+                if (baseOffset != null) {
+                    new MipsLsu(MipsLsu.LsuType.LW, rd, Register.SP, baseOffset + offset);
+                }
+            } else {
+                Register base = MipsBuilder.getValueToRegister(baseValue);
+                if (base != null) {
+                    new MipsLsu(MipsLsu.LsuType.LW, rd, base, offset);
+                } else {
+                    Register temp = Register.K1;
+                    MipsBuilder.loadValueToReg(baseValue, temp);
+                    new MipsLsu(MipsLsu.LsuType.LW, rd, temp, offset);
+                }
+            }
         } else {
             Register base = MipsBuilder.getValueToRegister(actualPointer);
             if (base != null) {

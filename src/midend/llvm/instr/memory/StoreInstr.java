@@ -55,6 +55,26 @@ public class StoreInstr extends Instr {
             if (offset != null) {
                 new MipsLsu(MipsLsu.LsuType.SW, rs, Register.SP, offset);
             }
+        } else if (actualAddress instanceof GepInstr gep && gep.isConstantOffset()) {
+            IrValue baseValue = gep.getPointer();
+            int offset = gep.getConstantOffsetValue();
+            if (baseValue instanceof IrGlobalValue) {
+                new MipsLsu(MipsLsu.LsuType.SW, rs, baseValue.getMipsLabel(), offset);
+            } else if (baseValue instanceof AllocateInstr) {
+                Integer baseOffset = MipsBuilder.getAllocaDataOffset(baseValue);
+                if (baseOffset != null) {
+                    new MipsLsu(MipsLsu.LsuType.SW, rs, Register.SP, baseOffset + offset);
+                }
+            } else {
+                Register base = MipsBuilder.getValueToRegister(baseValue);
+                if (base != null) {
+                    new MipsLsu(MipsLsu.LsuType.SW, rs, base, offset);
+                } else {
+                    Register temp = Register.K1;
+                    MipsBuilder.loadValueToReg(baseValue, temp);
+                    new MipsLsu(MipsLsu.LsuType.SW, rs, temp, offset);
+                }
+            }
         } else {
             Register base = MipsBuilder.getValueToRegister(actualAddress);
             if (base != null) {
