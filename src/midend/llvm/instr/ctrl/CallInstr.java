@@ -77,6 +77,7 @@ public class CallInstr extends Instr {
         HashSet<Register> registersToSave = new HashSet<>();
         // 活跃变量 (getLiveValuesAt 返回的是指令执行后的活跃变量，即跨越调用的变量)
         HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
+        liveValues.remove(this); // 优化：不需要保存当前指令定义的返回值
         for (midend.llvm.value.IrValue val : liveValues) {
             Register reg = MipsBuilder.getValueToRegister(val);
             if (reg != null && MipsBuilder.isCallerSaved(reg)) {

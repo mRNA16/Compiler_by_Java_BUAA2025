@@ -33,13 +33,21 @@ public class PrintIntInstr extends IOInstr {
         super.toMips();
         java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
-        // 1. 计算需要保护的寄存器
+        // 1. 计算需要保护的寄存器 (仅关注 $v0 和 $a0)
         java.util.HashSet<Register> registersToSave = new java.util.HashSet<>();
         java.util.HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
+        IrValue actualPrintValue = this.getUseValueList().get(0);
+        Register printReg = MipsBuilder.getValueToRegister(actualPrintValue);
+
         for (midend.llvm.value.IrValue val : liveValues) {
             Register reg = MipsBuilder.getValueToRegister(val);
-            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+            if (reg == Register.V0) {
                 registersToSave.add(reg);
+            } else if (reg == Register.A0) {
+                // 如果 A0 存的不是我们要打印的值，才需要保护
+                if (printReg != Register.A0) {
+                    registersToSave.add(reg);
+                }
             }
         }
 
@@ -47,15 +55,9 @@ public class PrintIntInstr extends IOInstr {
         MipsBuilder.saveCurrent(allocatedRegisterList, registersToSave);
 
         // 3. 加载打印值到 A0
-        IrValue actualPrintValue = this.getUseValueList().get(0);
-        Register rs = MipsBuilder.getValueToRegister(actualPrintValue);
-        if (rs != null) {
-            Integer offset = MipsBuilder.getRegisterOffset(rs);
-            if (offset != null && registersToSave.contains(rs)) {
-                // 如果该值在寄存器中且被保护了，从保护区加载
-                new MipsLsu(MipsLsu.LsuType.LW, Register.A0, Register.SP, offset);
-            } else {
-                new MarsMove(Register.A0, rs);
+        if (printReg != null) {
+            if (printReg != Register.A0) {
+                new MarsMove(Register.A0, printReg);
             }
         } else if (actualPrintValue instanceof IrConstInt constInt) {
             new MipsAlu(MipsAlu.AluType.ADDIU, Register.A0, Register.ZERO, constInt.getValue());

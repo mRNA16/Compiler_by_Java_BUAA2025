@@ -103,8 +103,7 @@ public class MipsBuilder {
         HashSet<Register> registersNeedSave = new HashSet<>();
         for (midend.llvm.value.IrBasicBlock block : irFunction.getBasicBlocks()) {
             for (midend.llvm.instr.Instr instr : block.getInstructions()) {
-                if (instr instanceof midend.llvm.instr.ctrl.CallInstr
-                        || instr instanceof midend.llvm.instr.io.IOInstr) {
+                if (instr instanceof midend.llvm.instr.ctrl.CallInstr) {
                     HashSet<midend.llvm.value.IrValue> liveValues = block.getLiveValuesAt(instr);
                     for (midend.llvm.value.IrValue val : liveValues) {
                         Register reg = valueRegisterMap.get(val);
@@ -120,6 +119,15 @@ public class MipsBuilder {
                                     && reg.ordinal() <= Register.A3.ordinal()) {
                                 registersNeedSave.add(reg);
                             }
+                        }
+                    }
+                } else if (instr instanceof midend.llvm.instr.io.IOInstr) {
+                    // 对于 IO 指令，我们只担心 $v0 和 $a0 被覆盖
+                    HashSet<midend.llvm.value.IrValue> liveValues = block.getLiveValuesAt(instr);
+                    for (midend.llvm.value.IrValue val : liveValues) {
+                        Register reg = valueRegisterMap.get(val);
+                        if (reg == Register.V0 || reg == Register.A0) {
+                            registersNeedSave.add(reg);
                         }
                     }
                 }

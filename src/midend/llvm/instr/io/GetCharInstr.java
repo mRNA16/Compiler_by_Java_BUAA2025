@@ -28,12 +28,13 @@ public class GetCharInstr extends IOInstr {
         super.toMips();
         java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
-        // 1. 计算需要保护的寄存器
+        // 1. 计算需要保护的寄存器 (仅关注 $v0)
         java.util.HashSet<Register> registersToSave = new java.util.HashSet<>();
         java.util.HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
+        liveValues.remove(this); // 结果本身不需要保存
         for (midend.llvm.value.IrValue val : liveValues) {
             Register reg = MipsBuilder.getValueToRegister(val);
-            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+            if (reg == Register.V0) {
                 registersToSave.add(reg);
             }
         }
@@ -44,7 +45,7 @@ public class GetCharInstr extends IOInstr {
         new MipsAlu(MipsAlu.AluType.ADDI, Register.V0, Register.ZERO, 12);
         new MipsSyscall();
 
-        // 3. 恢复现场 (在处理返回值之前恢复，避免覆盖 V0)
+        // 3. 恢复现场
         MipsBuilder.recoverCurrent(allocatedRegisterList, registersToSave);
 
         Register rd = MipsBuilder.getValueToRegister(this);

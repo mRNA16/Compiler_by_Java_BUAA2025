@@ -33,12 +33,12 @@ public class PrintStrInstr extends IOInstr {
         super.toMips();
         java.util.List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
-        // 1. 计算需要保护的寄存器
+        // 1. 计算需要保护的寄存器 (仅关注 $v0 和 $a0)
         java.util.HashSet<Register> registersToSave = new java.util.HashSet<>();
         java.util.HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
         for (midend.llvm.value.IrValue val : liveValues) {
             Register reg = MipsBuilder.getValueToRegister(val);
-            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+            if (reg == Register.V0 || reg == Register.A0) {
                 registersToSave.add(reg);
             }
         }
