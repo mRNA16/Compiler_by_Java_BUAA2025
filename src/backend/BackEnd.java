@@ -20,7 +20,6 @@ public class BackEnd {
 
     public static void generateMips() {
         irModule.toMips();
-        new backend.mips.Peephole(MipsBuilder.getCurrentModule()).optimize();
     }
 
     public static String getMipsCode() {
