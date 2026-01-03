@@ -35,7 +35,15 @@ public class MipsBuilder {
         return currentModule;
     }
 
+    private static boolean autoAdd = true;
+
+    public static void setAutoAdd(boolean value) {
+        autoAdd = value;
+    }
+
     public static void addAssembly(MipsAssembly mipsAssembly) {
+        if (!autoAdd)
+            return;
         if (mipsAssembly instanceof MipsDataAssembly) {
             currentModule.addToData(mipsAssembly);
         } else {

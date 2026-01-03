@@ -11,6 +11,14 @@ public class MarsLi extends MipsMars {
         this.number = number;
     }
 
+    public Register getRd() {
+        return rd;
+    }
+
+    public Integer getNumber() {
+        return number;
+    }
+
     @Override
     public String toString() {
         return "li " + this.rd + " " + this.number;

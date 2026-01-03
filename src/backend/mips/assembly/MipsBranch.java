@@ -30,6 +30,22 @@ public class MipsBranch extends MipsAssembly {
         this.label = label;
     }
 
+    public BranchType getBranchType() {
+        return branchType;
+    }
+
+    public Register getRs() {
+        return rs;
+    }
+
+    public Register getRt() {
+        return rt;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
     @Override
     public String toString() {
         return switch (this.branchType) {

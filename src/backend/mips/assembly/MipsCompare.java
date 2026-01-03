@@ -31,6 +31,26 @@ public class MipsCompare extends MipsAssembly {
         this.immediate = immediate;
     }
 
+    public CompareType getCompareType() {
+        return compareType;
+    }
+
+    public Register getRd() {
+        return rd;
+    }
+
+    public Register getRs() {
+        return rs;
+    }
+
+    public Register getRt() {
+        return rt;
+    }
+
+    public Integer getImmediate() {
+        return immediate;
+    }
+
     @Override
     public String toString() {
         return this.immediate == null ? compareType.toString().toLowerCase() + " " + rd + ", " + rs + ", " + rt

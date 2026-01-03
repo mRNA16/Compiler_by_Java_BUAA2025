@@ -11,6 +11,14 @@ public class MarsMove extends MipsMars {
         this.src = src;
     }
 
+    public Register getDst() {
+        return dst;
+    }
+
+    public Register getSrc() {
+        return src;
+    }
+
     @Override
     public String toString() {
         return (this.dst == this.src ? "# " : "") +

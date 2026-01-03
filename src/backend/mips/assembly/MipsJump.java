@@ -25,6 +25,18 @@ public class MipsJump extends MipsAssembly {
         this.rd = rd;
     }
 
+    public JumpType getJumpType() {
+        return jumpType;
+    }
+
+    public String getTargetLabel() {
+        return targetLabel;
+    }
+
+    public Register getRd() {
+        return rd;
+    }
+
     @Override
     public String toString() {
         return switch (this.jumpType) {

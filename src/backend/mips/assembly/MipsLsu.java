@@ -45,6 +45,26 @@ public class MipsLsu extends MipsAssembly {
         this.label = label;
     }
 
+    public LsuType getLsuType() {
+        return lsuType;
+    }
+
+    public Register getRd() {
+        return rd;
+    }
+
+    public Register getBase() {
+        return base;
+    }
+
+    public Integer getOffset() {
+        return offset;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
     public boolean isStoreType() {
         return switch (this.lsuType) {
             case SW, SH, SB -> true;
