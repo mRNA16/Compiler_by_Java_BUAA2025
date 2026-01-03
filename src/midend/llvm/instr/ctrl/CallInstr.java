@@ -73,9 +73,9 @@ public class CallInstr extends Instr {
         super.toMips();
         List<Register> allocatedRegisterList = MipsBuilder.getAllocatedRegList();
 
-        // 1. 计算需要保护的寄存器：在当前指令处活跃的 Caller-Saved 寄存器，以及作为参数使用的寄存器
+        // 1. 计算需要保护的寄存器：在当前指令处活跃的 Caller-Saved 寄存器
         HashSet<Register> registersToSave = new HashSet<>();
-        // 活跃变量
+        // 活跃变量 (getLiveValuesAt 返回的是指令执行后的活跃变量，即跨越调用的变量)
         HashSet<midend.llvm.value.IrValue> liveValues = this.getBlock().getLiveValuesAt(this);
         for (midend.llvm.value.IrValue val : liveValues) {
             Register reg = MipsBuilder.getValueToRegister(val);
@@ -83,11 +83,11 @@ public class CallInstr extends Instr {
                 registersToSave.add(reg);
             }
         }
-        // 参数变量 (为了处理参数覆盖问题，也需要保护)
+        // 2. 处理参数覆盖问题：如果参数来源是 $a0-$a3，也需要保护
         List<IrValue> actualArgs = getArgs();
         for (IrValue arg : actualArgs) {
             Register reg = MipsBuilder.getValueToRegister(arg);
-            if (reg != null && MipsBuilder.isCallerSaved(reg)) {
+            if (reg != null && reg.ordinal() >= Register.A0.ordinal() && reg.ordinal() <= Register.A3.ordinal()) {
                 registersToSave.add(reg);
             }
         }
@@ -146,10 +146,10 @@ public class CallInstr extends Instr {
             List<Register> allocatedRegisterList, HashSet<Register> savedRegisters) {
         Register srcReg = MipsBuilder.getValueToRegister(value);
         if (srcReg != null) {
-            int index = allocatedRegisterList.indexOf(srcReg);
-            if (index != -1 && MipsBuilder.isCallerSaved(srcReg) && savedRegisters.contains(srcReg)) {
+            Integer offset = MipsBuilder.getRegisterOffset(srcReg);
+            if (offset != null && MipsBuilder.isCallerSaved(srcReg) && savedRegisters.contains(srcReg)) {
                 // 如果该值在寄存器中且被保护了，从保护区加载
-                new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, regSaveBase - (index + 1) * 4);
+                new MipsLsu(MipsLsu.LsuType.LW, reg, Register.SP, offset);
             } else if (srcReg != reg) {
                 new MarsMove(reg, srcReg);
             }

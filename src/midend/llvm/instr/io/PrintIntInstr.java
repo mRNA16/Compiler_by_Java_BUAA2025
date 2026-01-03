@@ -42,23 +42,18 @@ public class PrintIntInstr extends IOInstr {
                 registersToSave.add(reg);
             }
         }
-        // 打印值本身也需要保护 (如果它在 Caller-Saved 寄存器中)
-        IrValue actualPrintValue = this.getUseValueList().get(0);
-        Register rs = MipsBuilder.getValueToRegister(actualPrintValue);
-        if (rs != null && MipsBuilder.isCallerSaved(rs)) {
-            registersToSave.add(rs);
-        }
 
         // 2. 保护现场
         MipsBuilder.saveCurrent(allocatedRegisterList, registersToSave);
 
         // 3. 加载打印值到 A0
+        IrValue actualPrintValue = this.getUseValueList().get(0);
+        Register rs = MipsBuilder.getValueToRegister(actualPrintValue);
         if (rs != null) {
-            int index = allocatedRegisterList.indexOf(rs);
-            if (index != -1 && registersToSave.contains(rs)) {
+            Integer offset = MipsBuilder.getRegisterOffset(rs);
+            if (offset != null && registersToSave.contains(rs)) {
                 // 如果该值在寄存器中且被保护了，从保护区加载
-                new MipsLsu(MipsLsu.LsuType.LW, Register.A0, Register.SP,
-                        MipsBuilder.getRegSaveOffset() - (index + 1) * 4);
+                new MipsLsu(MipsLsu.LsuType.LW, Register.A0, Register.SP, offset);
             } else {
                 new MarsMove(Register.A0, rs);
             }

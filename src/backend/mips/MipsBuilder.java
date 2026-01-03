@@ -21,6 +21,7 @@ public class MipsBuilder {
     private static int frameSize = 0;
     private static HashMap<IrValue, Integer> stackOffsetValueMap = null;
     private static HashMap<IrValue, Integer> allocaDataMap = null;
+    private static List<Register> registersNeedSaveList = null;
 
     private static int raOffset = 0;
     private static int regSaveOffset = 0;
@@ -60,8 +61,12 @@ public class MipsBuilder {
         allocaDataMap = new HashMap<>();
 
         // 1. 预留 RA 空间 (放在栈顶，Old SP 下面)
-        stackOffset -= 4;
-        raOffset = stackOffset;
+        if (!irFunction.isLeafFunction()) {
+            stackOffset -= 4;
+            raOffset = stackOffset;
+        } else {
+            raOffset = 0;
+        }
 
         // 2. 遍历所有指令分配空间 (局部变量)
         for (midend.llvm.value.IrBasicBlock block : irFunction.getBasicBlocks()) {
@@ -90,16 +95,40 @@ public class MipsBuilder {
         }
 
         // 3. 为进入参数分配空间 (Incoming parameters)
-        // 注意：只有前 3 个参数（A1-A3）可能需要溢出到当前栈帧
-        // 第 4 个及以后的参数已经在调用者的栈帧中了
         for (int i = 0; i < Math.min(4, irFunction.getParameters().size()); i++) {
             allocateStackForValue(irFunction.getParameters().get(i));
         }
 
         // 4. 预留寄存器保存空间 (Caller-saved registers)
-        ArrayList<Register> allocatedRegs = new ArrayList<>(new HashSet<>(irFunction.getValueRegisterMap().values()));
+        HashSet<Register> registersNeedSave = new HashSet<>();
+        for (midend.llvm.value.IrBasicBlock block : irFunction.getBasicBlocks()) {
+            for (midend.llvm.instr.Instr instr : block.getInstructions()) {
+                if (instr instanceof midend.llvm.instr.ctrl.CallInstr
+                        || instr instanceof midend.llvm.instr.io.IOInstr) {
+                    HashSet<midend.llvm.value.IrValue> liveValues = block.getLiveValuesAt(instr);
+                    for (midend.llvm.value.IrValue val : liveValues) {
+                        Register reg = valueRegisterMap.get(val);
+                        if (reg != null && isCallerSaved(reg)) {
+                            registersNeedSave.add(reg);
+                        }
+                    }
+                    // 额外逻辑：如果参数来源是 $a 寄存器，必须预留空间以防覆盖
+                    if (instr instanceof midend.llvm.instr.ctrl.CallInstr callInstr) {
+                        for (IrValue arg : callInstr.getArgs()) {
+                            Register reg = valueRegisterMap.get(arg);
+                            if (reg != null && reg.ordinal() >= Register.A0.ordinal()
+                                    && reg.ordinal() <= Register.A3.ordinal()) {
+                                registersNeedSave.add(reg);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        registersNeedSaveList = new ArrayList<>(registersNeedSave);
+        registersNeedSaveList.sort((r1, r2) -> r1.ordinal() - r2.ordinal());
         regSaveOffset = stackOffset;
-        stackOffset -= allocatedRegs.size() * 4;
+        stackOffset -= registersNeedSaveList.size() * 4;
 
         // 5. 预留参数空间 (Outgoing arguments, 放在栈底)
         int maxArgs = 0;
@@ -208,22 +237,22 @@ public class MipsBuilder {
 
     public static void saveCurrent(List<Register> allocatedRegisterList, Set<Register> registersToSave) {
         int baseOffset = getRegSaveOffset();
-        for (int i = 0; i < allocatedRegisterList.size(); i++) {
-            Register reg = allocatedRegisterList.get(i);
-            if (isCallerSaved(reg) && registersToSave.contains(reg)) {
+        for (Register reg : registersToSave) {
+            int index = registersNeedSaveList.indexOf(reg);
+            if (index != -1) {
                 new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.SW,
-                        reg, Register.SP, baseOffset - (i + 1) * 4);
+                        reg, Register.SP, baseOffset - (index + 1) * 4);
             }
         }
     }
 
     public static void recoverCurrent(List<Register> allocatedRegisterList, Set<Register> registersToRestore) {
         int baseOffset = getRegSaveOffset();
-        for (int i = 0; i < allocatedRegisterList.size(); i++) {
-            Register reg = allocatedRegisterList.get(i);
-            if (isCallerSaved(reg) && registersToRestore.contains(reg)) {
+        for (Register reg : registersToRestore) {
+            int index = registersNeedSaveList.indexOf(reg);
+            if (index != -1) {
                 new backend.mips.assembly.MipsLsu(backend.mips.assembly.MipsLsu.LsuType.LW,
-                        reg, Register.SP, baseOffset - (i + 1) * 4);
+                        reg, Register.SP, baseOffset - (index + 1) * 4);
             }
         }
     }
@@ -240,8 +269,10 @@ public class MipsBuilder {
     }
 
     public static Integer getRegisterOffset(Register register) {
-        List<Register> allocatedRegs = getAllocatedRegList();
-        int index = allocatedRegs.indexOf(register);
+        if (isCalleeSaved(register)) {
+            return null;
+        }
+        int index = registersNeedSaveList.indexOf(register);
         if (index == -1)
             return null;
         return getRegSaveOffset() - (index + 1) * 4;

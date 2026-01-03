@@ -64,7 +64,9 @@ public class ReturnInstr extends Instr {
                 }
             }
             // 恢复 RA 寄存器
-            new MipsLsu(MipsLsu.LsuType.LW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+            if (!MipsBuilder.getCurrentFunction().isLeafFunction()) {
+                new MipsLsu(MipsLsu.LsuType.LW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+            }
             // 恢复 SP 寄存器
             new MipsAlu(MipsAlu.AluType.ADDIU, Register.SP, Register.SP, frameSize);
         }

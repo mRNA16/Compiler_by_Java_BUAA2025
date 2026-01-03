@@ -59,6 +59,17 @@ public class IrFunction extends IrValue {
         return this.irName.equals("@main");
     }
 
+    public boolean isLeafFunction() {
+        for (IrBasicBlock block : basicBlocks) {
+            for (midend.llvm.instr.Instr instr : block.getInstructions()) {
+                if (instr instanceof midend.llvm.instr.ctrl.CallInstr) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public void promiseReturn() {
         IrBasicBlock basicBlock = IrBuilder.getCurrentBasicBlock();
         if (!basicBlock.hasTerminator()) {
@@ -119,7 +130,9 @@ public class IrFunction extends IrValue {
         if (frameSize > 0) {
             new MipsAlu(MipsAlu.AluType.ADDIU, Register.SP, Register.SP, -frameSize);
             // 保存 RA 寄存器
-            new MipsLsu(MipsLsu.LsuType.SW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+            if (!this.isLeafFunction()) {
+                new MipsLsu(MipsLsu.LsuType.SW, Register.RA, Register.SP, MipsBuilder.getRaOffset());
+            }
 
             // 保存 Callee-Saved 寄存器 (S0-S7)
             for (Register reg : MipsBuilder.getAllocatedRegList()) {
