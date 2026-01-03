@@ -47,6 +47,12 @@ public class GraphColoringRegAlloc extends Optimizer {
         }
         for (IrBasicBlock block : function.getBasicBlocks()) {
             for (Instr instr : block.getInstructions()) {
+                if (instr instanceof MoveInstr move) {
+                    IrValue dst = move.getDstValue();
+                    if (livenessAnalysis.isAllocatable(dst)) {
+                        addNode(dst);
+                    }
+                }
                 if (livenessAnalysis.isAllocatable(instr)) {
                     addNode(instr);
                 }
@@ -88,37 +94,35 @@ public class GraphColoringRegAlloc extends Optimizer {
     private void buildInterferenceGraph(IrFunction function) {
         for (IrBasicBlock block : function.getBasicBlocks()) {
             HashSet<IrValue> live = new HashSet<>(block.getLiveOut());
-
-            // 只需要考虑我们在 nodes 集合中的变量
             live.retainAll(nodes);
 
             List<Instr> instructions = block.getInstructions();
             for (int i = instructions.size() - 1; i >= 0; i--) {
                 Instr instr = instructions.get(i);
 
-                // 如果是定义点
-                if (nodes.contains(instr)) {
-                    // 对于 Move 指令，如果 live 中包含 src，则不添加冲突边
-                    boolean isMove = instr instanceof MoveInstr;
-                    IrValue moveSrc = isMove ? ((MoveInstr) instr).getSrcValue() : null;
-
+                if (instr instanceof MoveInstr move) {
+                    IrValue dst = move.getDstValue();
+                    if (nodes.contains(dst)) {
+                        IrValue src = move.getSrcValue();
+                        for (IrValue v : live) {
+                            if (v == src)
+                                continue;
+                            addEdge(dst, v);
+                        }
+                        live.remove(dst);
+                    }
+                } else if (nodes.contains(instr)) {
                     for (IrValue v : live) {
-                        if (isMove && v == moveSrc)
-                            continue;
                         addEdge(instr, v);
                     }
-
-                    // 定义变量不再活跃
                     live.remove(instr);
                 }
 
-                // 添加使用点到 live
                 for (IrValue use : instr.getUseValueList()) {
                     addUseToLive(use, live);
                 }
             }
 
-            // Fix: 在入口块的开始处，所有 LiveIn 的变量（主要是参数）都互相冲突
             if (block == function.getEntryBlock()) {
                 List<IrValue> liveList = new ArrayList<>(live);
                 for (int i = 0; i < liveList.size(); i++) {
@@ -134,7 +138,6 @@ public class GraphColoringRegAlloc extends Optimizer {
         if (val == null)
             return;
         if (val instanceof GepInstr gep && gep.canBeFoldedIntoAllUsers()) {
-            // 如果是折叠的 Gep，则其操作数才是真正的使用点
             for (IrValue op : gep.getUseValueList()) {
                 addUseToLive(op, live);
             }
@@ -147,35 +150,42 @@ public class GraphColoringRegAlloc extends Optimizer {
         int K = Register.getUsableRegisters().size();
         Set<IrValue> workList = new HashSet<>(nodes);
 
+        // 动态维护度数，因为 simplify 过程中度数会变化
+        Map<IrValue, Integer> currentDegree = new HashMap<>(degree);
+
         while (!workList.isEmpty()) {
             IrValue nodeToRemove = null;
 
+            // 1. 寻找度数 < K 的节点 (Simplify)
             for (IrValue v : workList) {
-                if (degree.get(v) < K) {
+                if (currentDegree.get(v) < K) {
                     nodeToRemove = v;
                     break;
                 }
             }
 
+            // 2. 如果没有 < K 的节点，则需要溢出 (Spill)
             if (nodeToRemove == null) {
-                int maxDegree = -1;
+                // 使用 SpillCost / Degree 启发式
+                // SpillCost = 使用次数 + 定义次数 (SSA 下定义次数为 1)
+                double minCost = Double.MAX_VALUE;
                 for (IrValue v : workList) {
-                    if (degree.get(v) > maxDegree) {
-                        maxDegree = degree.get(v);
+                    double cost = (1.0 + v.getBeUsedList().size()) / (currentDegree.get(v) + 1);
+                    if (cost < minCost) {
+                        minCost = cost;
                         nodeToRemove = v;
                     }
                 }
             }
 
+            // 移除节点
             workList.remove(nodeToRemove);
             selectStack.push(nodeToRemove);
 
+            // 更新邻居度数
             for (IrValue neighbor : adjList.get(nodeToRemove)) {
                 if (workList.contains(neighbor)) {
-                    int currentDegree = degree.get(neighbor);
-                    if (currentDegree > 0) {
-                        degree.put(neighbor, currentDegree - 1);
-                    }
+                    currentDegree.put(neighbor, currentDegree.get(neighbor) - 1);
                 }
             }
         }

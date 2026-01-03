@@ -1,6 +1,7 @@
 package midend.llvm.value;
 
 import midend.llvm.instr.Instr;
+import midend.llvm.instr.MoveInstr;
 import midend.llvm.instr.ctrl.BrCondInstr;
 import midend.llvm.instr.ctrl.BrInstr;
 import midend.llvm.instr.ctrl.ReturnInstr;
@@ -217,7 +218,11 @@ public class IrBasicBlock extends IrValue {
             }
             // 逆向更新活跃变量
             // 1. 移除被定义的变量 (Def)
-            live.remove(current);
+            if (current instanceof MoveInstr move) {
+                live.remove(move.getDstValue());
+            } else {
+                live.remove(current);
+            }
             // 2. 添加被使用的变量 (Use)
             for (IrValue use : current.getUseValueList()) {
                 if (isAllocatable(use)) {
