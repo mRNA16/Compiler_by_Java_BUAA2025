@@ -5,8 +5,10 @@ import midend.llvm.value.IrValue;
 import midend.llvm.value.IrBasicBlock;
 import midend.llvm.instr.Instr;
 import midend.llvm.instr.MoveInstr;
+import midend.llvm.instr.ctrl.CallInstr;
 import midend.llvm.instr.memory.GepInstr;
 import backend.mips.Register;
+import backend.mips.MipsBuilder;
 
 import java.util.*;
 
@@ -14,6 +16,7 @@ public class GraphColoringRegAlloc extends Optimizer {
     private Map<IrValue, Set<IrValue>> adjList;
     private Map<IrValue, Integer> degree;
     private Set<IrValue> nodes;
+    private Set<IrValue> spansCall; // 记录跨越函数调用的变量
     private Stack<IrValue> selectStack;
     private LivenessAnalysis livenessAnalysis;
 
@@ -23,7 +26,6 @@ public class GraphColoringRegAlloc extends Optimizer {
 
     @Override
     public void optimize() {
-        // 确保活跃变量分析是最新的
         livenessAnalysis.optimize();
 
         for (IrFunction function : irModule.getFunctions()) {
@@ -34,14 +36,13 @@ public class GraphColoringRegAlloc extends Optimizer {
     }
 
     private void allocateRegister(IrFunction function) {
-        // 1. 初始化数据结构
         adjList = new HashMap<>();
         degree = new HashMap<>();
         nodes = new HashSet<>();
+        spansCall = new HashSet<>();
         selectStack = new Stack<>();
 
-        // 2. 收集所有需要分配寄存器的值 (Nodes)
-        // 排除前4个参数，因为它们固定在 A0-A3
+        // 收集节点
         for (int i = 4; i < function.getParameters().size(); i++) {
             addNode(function.getParameters().get(i));
         }
@@ -59,13 +60,8 @@ public class GraphColoringRegAlloc extends Optimizer {
             }
         }
 
-        // 3. 构建冲突图
         buildInterferenceGraph(function);
-
-        // 4. 简化 (Simplify) & 溢出选择 (Spill)
         simplify();
-
-        // 5. 选择颜色 (Select)
         assignColors(function);
     }
 
@@ -100,6 +96,7 @@ public class GraphColoringRegAlloc extends Optimizer {
             for (int i = instructions.size() - 1; i >= 0; i--) {
                 Instr instr = instructions.get(i);
 
+                // 定义点处理
                 if (instr instanceof MoveInstr move) {
                     IrValue dst = move.getDstValue();
                     if (nodes.contains(dst)) {
@@ -116,6 +113,11 @@ public class GraphColoringRegAlloc extends Optimizer {
                         addEdge(instr, v);
                     }
                     live.remove(instr);
+                }
+
+                // 核心改进：识别跨调用变量
+                if (instr instanceof CallInstr) {
+                    spansCall.addAll(live);
                 }
 
                 for (IrValue use : instr.getUseValueList()) {
@@ -149,14 +151,10 @@ public class GraphColoringRegAlloc extends Optimizer {
     private void simplify() {
         int K = Register.getUsableRegisters().size();
         Set<IrValue> workList = new HashSet<>(nodes);
-
-        // 动态维护度数，因为 simplify 过程中度数会变化
         Map<IrValue, Integer> currentDegree = new HashMap<>(degree);
 
         while (!workList.isEmpty()) {
             IrValue nodeToRemove = null;
-
-            // 1. 寻找度数 < K 的节点 (Simplify)
             for (IrValue v : workList) {
                 if (currentDegree.get(v) < K) {
                     nodeToRemove = v;
@@ -164,13 +162,12 @@ public class GraphColoringRegAlloc extends Optimizer {
                 }
             }
 
-            // 2. 如果没有 < K 的节点，则需要溢出 (Spill)
             if (nodeToRemove == null) {
-                // 使用 SpillCost / Degree 启发式
-                // SpillCost = 使用次数 + 定义次数 (SSA 下定义次数为 1)
                 double minCost = Double.MAX_VALUE;
                 for (IrValue v : workList) {
-                    double cost = (1.0 + v.getBeUsedList().size()) / (currentDegree.get(v) + 1);
+                    // 跨调用变量的溢出代价更高
+                    double weight = spansCall.contains(v) ? 10.0 : 1.0;
+                    double cost = (weight + v.getBeUsedList().size()) / (currentDegree.get(v) + 1);
                     if (cost < minCost) {
                         minCost = cost;
                         nodeToRemove = v;
@@ -178,11 +175,9 @@ public class GraphColoringRegAlloc extends Optimizer {
                 }
             }
 
-            // 移除节点
             workList.remove(nodeToRemove);
             selectStack.push(nodeToRemove);
 
-            // 更新邻居度数
             for (IrValue neighbor : adjList.get(nodeToRemove)) {
                 if (workList.contains(neighbor)) {
                     currentDegree.put(neighbor, currentDegree.get(neighbor) - 1);
@@ -193,12 +188,22 @@ public class GraphColoringRegAlloc extends Optimizer {
 
     private void assignColors(IrFunction function) {
         List<Register> usableRegisters = Register.getUsableRegisters();
+
+        // 将可用寄存器分为 T 类和 S 类
+        List<Register> tRegs = new ArrayList<>();
+        List<Register> sRegs = new ArrayList<>();
+        for (Register reg : usableRegisters) {
+            if (MipsBuilder.isCalleeSaved(reg))
+                sRegs.add(reg);
+            else
+                tRegs.add(reg);
+        }
+
         Map<IrValue, Register> colors = function.getValueRegisterMap();
 
         while (!selectStack.isEmpty()) {
             IrValue node = selectStack.pop();
             Set<Register> usedColors = new HashSet<>();
-
             for (IrValue neighbor : adjList.get(node)) {
                 if (colors.containsKey(neighbor)) {
                     usedColors.add(colors.get(neighbor));
@@ -206,16 +211,29 @@ public class GraphColoringRegAlloc extends Optimizer {
             }
 
             Register assignedReg = null;
-            for (Register reg : usableRegisters) {
-                if (!usedColors.contains(reg)) {
-                    assignedReg = reg;
-                    break;
-                }
+            if (spansCall.contains(node)) {
+                // 跨调用变量：优先选 S 寄存器，避开 T 寄存器
+                assignedReg = pickRegister(sRegs, usedColors);
+                if (assignedReg == null)
+                    assignedReg = pickRegister(tRegs, usedColors);
+            } else {
+                // 非跨调用变量：优先选 T 寄存器，节省 Prologue/Epilogue 开销
+                assignedReg = pickRegister(tRegs, usedColors);
+                if (assignedReg == null)
+                    assignedReg = pickRegister(sRegs, usedColors);
             }
 
             if (assignedReg != null) {
                 colors.put(node, assignedReg);
             }
         }
+    }
+
+    private Register pickRegister(List<Register> preferred, Set<Register> used) {
+        for (Register reg : preferred) {
+            if (!used.contains(reg))
+                return reg;
+        }
+        return null;
     }
 }

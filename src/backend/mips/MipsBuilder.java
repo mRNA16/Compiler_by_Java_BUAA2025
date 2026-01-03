@@ -99,7 +99,7 @@ public class MipsBuilder {
             allocateStackForValue(irFunction.getParameters().get(i));
         }
 
-        // 4. 预留寄存器保存空间 (Caller-saved registers)
+        // 4. 预留寄存器保存空间 (Caller-saved & Callee-saved registers)
         HashSet<Register> registersNeedSave = new HashSet<>();
         for (midend.llvm.value.IrBasicBlock block : irFunction.getBasicBlocks()) {
             for (midend.llvm.instr.Instr instr : block.getInstructions()) {
@@ -133,6 +133,13 @@ public class MipsBuilder {
                 }
             }
         }
+        // 关键改进：添加所有被使用的 Callee-Saved 寄存器到保存列表
+        for (Register reg : valueRegisterMap.values()) {
+            if (isCalleeSaved(reg)) {
+                registersNeedSave.add(reg);
+            }
+        }
+
         registersNeedSaveList = new ArrayList<>(registersNeedSave);
         registersNeedSaveList.sort((r1, r2) -> r1.ordinal() - r2.ordinal());
         regSaveOffset = stackOffset;
@@ -277,9 +284,6 @@ public class MipsBuilder {
     }
 
     public static Integer getRegisterOffset(Register register) {
-        if (isCalleeSaved(register)) {
-            return null;
-        }
         int index = registersNeedSaveList.indexOf(register);
         if (index == -1)
             return null;
