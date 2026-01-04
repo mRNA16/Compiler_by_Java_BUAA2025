@@ -33,6 +33,18 @@ public class MipsMdu extends MipsAssembly {
         return this.mduType;
     }
 
+    public Register getRd() {
+        return rd;
+    }
+
+    public Register getRs() {
+        return rs;
+    }
+
+    public Register getRt() {
+        return rt;
+    }
+
     @Override
     public String toString() {
         return this.rd == null ? this.mduType.toString().toLowerCase() + " " + rs + ", " + rt

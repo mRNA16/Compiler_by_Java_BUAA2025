@@ -4,6 +4,7 @@ import backend.mips.assembly.*;
 import backend.mips.assembly.fake.*;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.ListIterator;
 import java.util.Map;
 
 public class Peephole {
@@ -29,14 +30,15 @@ public class Peephole {
     private boolean removeRedundantInstructions() {
         ArrayList<MipsAssembly> text = module.getTextSegment();
         boolean changed = false;
-        for (int i = 0; i < text.size(); i++) {
-            MipsAssembly instr = text.get(i);
+        ListIterator<MipsAssembly> it = text.listIterator();
+
+        while (it.hasNext()) {
+            MipsAssembly instr = it.next();
 
             // 1. move $r, $r
             if (instr instanceof MarsMove move) {
                 if (move.getDst() == move.getSrc()) {
-                    text.remove(i);
-                    i--;
+                    it.remove();
                     changed = true;
                     continue;
                 }
@@ -47,14 +49,12 @@ public class Peephole {
                 if (alu.getImmediate() != null && alu.getImmediate() == 0) {
                     if (alu.getAluType() == MipsAlu.AluType.ADDI || alu.getAluType() == MipsAlu.AluType.ADDIU) {
                         if (alu.getRd() == alu.getRs()) {
-                            text.remove(i);
-                            i--;
+                            it.remove();
                             changed = true;
                             continue;
                         } else {
-                            text.set(i, new MarsMove(alu.getRd(), alu.getRs()));
+                            it.set(new MarsMove(alu.getRd(), alu.getRs()));
                             changed = true;
-                            continue;
                         }
                     }
                 }
@@ -62,14 +62,12 @@ public class Peephole {
                 if (alu.getRt() == Register.ZERO
                         && (alu.getAluType() == MipsAlu.AluType.ADD || alu.getAluType() == MipsAlu.AluType.ADDU)) {
                     if (alu.getRd() == alu.getRs()) {
-                        text.remove(i);
-                        i--;
+                        it.remove();
                         changed = true;
                         continue;
                     } else {
-                        text.set(i, new MarsMove(alu.getRd(), alu.getRs()));
+                        it.set(new MarsMove(alu.getRd(), alu.getRs()));
                         changed = true;
-                        continue;
                     }
                 }
             }
@@ -77,9 +75,8 @@ public class Peephole {
             // 3. li $r, 0 -> move $r, $zero
             if (instr instanceof MarsLi li) {
                 if (li.getNumber() == 0) {
-                    text.set(i, new MarsMove(li.getRd(), Register.ZERO));
+                    it.set(new MarsMove(li.getRd(), Register.ZERO));
                     changed = true;
-                    continue;
                 }
             }
         }
@@ -91,30 +88,30 @@ public class Peephole {
         boolean changed = false;
 
         // 1. Jump to next instruction
-        for (int i = 0; i < text.size() - 1; i++) {
+        int i = 0;
+        while (i < text.size()) {
             MipsAssembly instr = text.get(i);
+            boolean removed = false;
             if (instr instanceof MipsJump jump && jump.getJumpType() == MipsJump.JumpType.J) {
-                // Skip annotations
-                int nextIdx = i + 1;
-                while (nextIdx < text.size() && text.get(nextIdx) instanceof MipsAnnotation) {
-                    nextIdx++;
-                }
+                int nextIdx = next(text, i);
                 if (nextIdx < text.size() && text.get(nextIdx) instanceof MipsLabel label) {
                     if (label.getLabel().equals(jump.getTargetLabel())) {
                         text.remove(i);
-                        i--;
                         changed = true;
-                        continue;
+                        removed = true;
                     }
                 }
+            }
+            if (!removed) {
+                i++;
             }
         }
 
         // 2. Jump to jump
         Map<String, String> jumpMap = new HashMap<>();
-        for (int i = 0; i < text.size(); i++) {
-            if (text.get(i) instanceof MipsLabel label) {
-                int nextIdx = i + 1;
+        for (int j = 0; j < text.size(); j++) {
+            if (text.get(j) instanceof MipsLabel label) {
+                int nextIdx = j + 1;
                 while (nextIdx < text.size() && text.get(nextIdx) instanceof MipsAnnotation) {
                     nextIdx++;
                 }
@@ -126,14 +123,14 @@ public class Peephole {
         }
 
         if (!jumpMap.isEmpty()) {
-            for (int i = 0; i < text.size(); i++) {
-                MipsAssembly instr = text.get(i);
+            for (int k = 0; k < text.size(); k++) {
+                MipsAssembly instr = text.get(k);
                 if (instr instanceof MipsJump jump && jump.getJumpType() == MipsJump.JumpType.J) {
                     String target = jump.getTargetLabel();
                     if (jumpMap.containsKey(target)) {
                         String newTarget = jumpMap.get(target);
                         if (!newTarget.equals(target)) {
-                            text.set(i, new MipsJump(MipsJump.JumpType.J, newTarget));
+                            text.set(k, new MipsJump(MipsJump.JumpType.J, newTarget));
                             changed = true;
                         }
                     }
@@ -143,10 +140,10 @@ public class Peephole {
                         String newTarget = jumpMap.get(target);
                         if (!newTarget.equals(target)) {
                             if (branch.getRt() != null) {
-                                text.set(i, new MipsBranch(branch.getBranchType(), branch.getRs(), branch.getRt(),
+                                text.set(k, new MipsBranch(branch.getBranchType(), branch.getRs(), branch.getRt(),
                                         newTarget));
                             } else {
-                                text.set(i, new MipsBranch(branch.getBranchType(), branch.getRs(), newTarget));
+                                text.set(k, new MipsBranch(branch.getBranchType(), branch.getRs(), newTarget));
                             }
                             changed = true;
                         }
@@ -157,10 +154,19 @@ public class Peephole {
 
         // 3. Jump over jump
         // beq $r1, $r2, L1; j L2; L1: -> bne $r1, $r2, L2; L1:
-        for (int i = 0; i < text.size() - 2; i++) {
+        i = 0;
+        while (i < text.size()) {
             MipsAssembly i1 = text.get(i);
-            MipsAssembly i2 = text.get(i + 1);
-            MipsAssembly i3 = text.get(i + 2);
+            int idx2 = next(text, i);
+            if (idx2 >= text.size())
+                break;
+            MipsAssembly i2 = text.get(idx2);
+            int idx3 = next(text, idx2);
+            if (idx3 >= text.size()) {
+                i++;
+                continue;
+            }
+            MipsAssembly i3 = text.get(idx3);
 
             if (i1 instanceof MipsBranch branch && i2 instanceof MipsJump jump
                     && jump.getJumpType() == MipsJump.JumpType.J && i3 instanceof MipsLabel label) {
@@ -173,11 +179,12 @@ public class Peephole {
                         } else {
                             text.set(i, new MipsBranch(inverted, branch.getRs(), jump.getTargetLabel()));
                         }
-                        text.remove(i + 1);
+                        text.remove(idx2);
                         changed = true;
                     }
                 }
             }
+            i++;
         }
 
         return changed;
@@ -197,10 +204,15 @@ public class Peephole {
     private boolean mergeStoreLoad() {
         ArrayList<MipsAssembly> text = module.getTextSegment();
         boolean changed = false;
-        for (int i = 0; i < text.size() - 1; i++) {
+        int i = 0;
+        while (i < text.size()) {
             MipsAssembly instr1 = text.get(i);
-            MipsAssembly instr2 = text.get(i + 1);
+            int idx2 = next(text, i);
+            if (idx2 >= text.size())
+                break;
+            MipsAssembly instr2 = text.get(idx2);
 
+            boolean removed = false;
             if (instr1 instanceof MipsLsu lsu1 && lsu1.getLsuType() == MipsLsu.LsuType.SW) {
                 if (instr2 instanceof MipsLsu lsu2 && lsu2.getLsuType() == MipsLsu.LsuType.LW) {
                     if (lsu1.getBase() == lsu2.getBase() &&
@@ -208,14 +220,18 @@ public class Peephole {
                             lsu1.getLabel() == null && lsu2.getLabel() == null) {
 
                         if (lsu1.getRd() == lsu2.getRd()) {
-                            text.remove(i + 1);
+                            text.remove(idx2);
                             changed = true;
+                            removed = true;
                         } else {
-                            text.set(i + 1, new MarsMove(lsu2.getRd(), lsu1.getRd()));
+                            text.set(idx2, new MarsMove(lsu2.getRd(), lsu1.getRd()));
                             changed = true;
                         }
                     }
                 }
+            }
+            if (!removed) {
+                i++;
             }
         }
         return changed;
@@ -224,15 +240,20 @@ public class Peephole {
     private boolean mergeCompareAndBranch() {
         ArrayList<MipsAssembly> text = module.getTextSegment();
         boolean changed = false;
-        for (int i = 0; i < text.size() - 1; i++) {
+        int i = 0;
+        while (i < text.size()) {
             MipsAssembly i1 = text.get(i);
-            MipsAssembly i2 = text.get(i + 1);
+            int idx2 = next(text, i);
+            if (idx2 >= text.size())
+                break;
+            MipsAssembly i2 = text.get(idx2);
 
+            boolean removed = false;
             if (i1 instanceof MipsCompare cmp && i2 instanceof MipsBranch br) {
                 if (br.getRt() == Register.ZERO && br.getRs() == cmp.getRd()) {
                     // Check if cmp.getRd() is used later before being redefined or before a label
                     boolean usedLater = false;
-                    for (int j = i + 2; j < text.size(); j++) {
+                    for (int j = idx2 + 1; j < text.size(); j++) {
                         MipsAssembly future = text.get(j);
                         if (future instanceof MipsLabel)
                             break;
@@ -261,12 +282,16 @@ public class Peephole {
                         }
 
                         if (newBrType != null && cmp.getRt() != null) {
-                            text.set(i + 1, new MipsBranch(newBrType, cmp.getRs(), cmp.getRt(), br.getLabel()));
+                            text.set(idx2, new MipsBranch(newBrType, cmp.getRs(), cmp.getRt(), br.getLabel()));
                             text.remove(i);
                             changed = true;
+                            removed = true;
                         }
                     }
                 }
+            }
+            if (!removed) {
+                i++;
             }
         }
         return changed;
@@ -289,6 +314,9 @@ public class Peephole {
             }
         } else if (instr instanceof MarsMove move) {
             return move.getSrc() == reg;
+        } else if (instr instanceof MipsMdu mdu) {
+            return mdu.getRs() == reg || mdu.getRt() == reg || (mdu.getMduType() != MipsMdu.MduType.MFHI
+                    && mdu.getMduType() != MipsMdu.MduType.MFLO && mdu.getRd() == reg);
         }
         return false;
     }
@@ -304,7 +332,20 @@ public class Peephole {
             return move.getDst() == reg;
         } else if (instr instanceof MarsLi li) {
             return li.getRd() == reg;
+        } else if (instr instanceof MipsMdu mdu) {
+            return (mdu.getMduType() == MipsMdu.MduType.MFHI || mdu.getMduType() == MipsMdu.MduType.MFLO)
+                    && mdu.getRd() == reg;
+        } else if (instr instanceof MipsJump jump) {
+            return jump.getJumpType() == MipsJump.JumpType.JAL && reg == Register.RA;
         }
         return false;
+    }
+
+    private int next(ArrayList<MipsAssembly> text, int i) {
+        int next = i + 1;
+        while (next < text.size() && text.get(next) instanceof MipsAnnotation) {
+            next++;
+        }
+        return next;
     }
 }
